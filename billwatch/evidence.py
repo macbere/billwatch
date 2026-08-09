@@ -152,6 +152,28 @@ class EvidenceLedger:
         self._missing_evidence: list = []
         self._conflicts: list = []
 
+    # -- Build 2, Section 10: strengthened immutability -------------------
+    @staticmethod
+    def _reject_duplicate_id(existing_items, new_item, entity_name: str) -> None:
+        """
+        Every evidence entity is a frozen dataclass, so in-place attribute
+        mutation already raises dataclasses.FrozenInstanceError (Build 1).
+        This closes the remaining gap flagged as a Build 1 risk: it also
+        refuses to let a caller add a *second* item sharing an existing
+        item's id, since that would let someone smuggle a "changed" record
+        past the frozen-field protection by re-inserting under the same
+        identity. Any genuine change must be a new entity with a new id --
+        never a same-id replacement.
+        """
+        existing_ids = {item.id for item in existing_items}
+        if new_item.id in existing_ids:
+            raise ValueError(
+                f"{entity_name} with id={new_item.id!r} already exists in the "
+                "ledger. Evidence entities are immutable and append-only: "
+                "represent any change as a new entity with a new id, never "
+                "by reusing an existing id."
+            )
+
     # -- Gate 2 enforcement point -------------------------------------
     def add_source(self, source: Source) -> None:
         if isinstance(source, UserContext):
@@ -162,6 +184,7 @@ class EvidenceLedger:
             )
         if not isinstance(source, Source):
             raise TypeError(f"Expected Source, got {type(source).__name__}")
+        self._reject_duplicate_id(self._sources, source, "Source")
         self._sources.append(source)
 
     def add_document(self, document: Document) -> None:
@@ -169,12 +192,15 @@ class EvidenceLedger:
             raise TypeError("UserContext cannot be added as a Document.")
         if not isinstance(document, Document):
             raise TypeError(f"Expected Document, got {type(document).__name__}")
+        self._reject_duplicate_id(self._documents, document, "Document")
         self._documents.append(document)
 
     def add_fact(self, fact: ExtractedFact) -> None:
+        self._reject_duplicate_id(self._facts, fact, "ExtractedFact")
         self._facts.append(fact)
 
     def add_claim(self, claim: Claim) -> None:
+        self._reject_duplicate_id(self._claims, claim, "Claim")
         self._claims.append(claim)
 
     def add_hypothesis(self, hypothesis: Hypothesis) -> None:
@@ -187,21 +213,27 @@ class EvidenceLedger:
                     f"Hypothesis references unknown fact_id={fact_id!r}; "
                     "orphan hypotheses are rejected."
                 )
+        self._reject_duplicate_id(self._hypotheses, hypothesis, "Hypothesis")
         self._hypotheses.append(hypothesis)
 
     def add_supporting_evidence(self, item: SupportingEvidence) -> None:
+        self._reject_duplicate_id(self._supporting, item, "SupportingEvidence")
         self._supporting.append(item)
 
     def add_contradictory_evidence(self, item: ContradictoryEvidence) -> None:
+        self._reject_duplicate_id(self._contradictory, item, "ContradictoryEvidence")
         self._contradictory.append(item)
 
     def add_verification(self, item: Verification) -> None:
+        self._reject_duplicate_id(self._verifications, item, "Verification")
         self._verifications.append(item)
 
     def add_missing_evidence(self, item: MissingEvidence) -> None:
+        self._reject_duplicate_id(self._missing_evidence, item, "MissingEvidence")
         self._missing_evidence.append(item)
 
     def add_conflict(self, item: Conflict) -> None:
+        self._reject_duplicate_id(self._conflicts, item, "Conflict")
         self._conflicts.append(item)
 
     # -- read-only views -------------------------------------------------

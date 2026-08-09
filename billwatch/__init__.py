@@ -39,6 +39,16 @@ from .case_scope import (
 from .adjudication import Adjudication, AdjudicationError
 from .state_machine import InvestigationStateMachine, IllegalTransitionError
 from .investigation import Investigation
+from .authority import (
+    ClaimType,
+    AuthorityResult,
+    AuthorityDecision,
+    AuthorityEngineError,
+    PotentialConflict,
+    APPROVED_LICENSE_BASES,
+    evaluate_source_authority,
+    flag_potential_conflict,
+)
 
 __all__ = [
     "SourceType", "AuthorityLevel", "CaseScopeValue", "ScopeProvenance",
@@ -52,4 +62,7 @@ __all__ = [
     "Adjudication", "AdjudicationError",
     "InvestigationStateMachine", "IllegalTransitionError",
     "Investigation",
+    "ClaimType", "AuthorityResult", "AuthorityDecision", "AuthorityEngineError",
+    "PotentialConflict", "APPROVED_LICENSE_BASES",
+    "evaluate_source_authority", "flag_potential_conflict",
 ]
