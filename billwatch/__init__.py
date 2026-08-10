@@ -49,6 +49,20 @@ from .authority import (
     evaluate_source_authority,
     flag_potential_conflict,
 )
+from .reference_data import (
+    LookupStatus,
+    ReferenceDataError,
+    ValidationRejection,
+    HCPCSRecord,
+    ICD10Record,
+    NCCIPairRecord,
+    ReferenceSnapshot,
+    LookupResult,
+    ReferenceStore,
+    validate_hcpcs_record,
+    validate_icd10_record,
+    validate_ncci_pair_record,
+)
 
 __all__ = [
     "SourceType", "AuthorityLevel", "CaseScopeValue", "ScopeProvenance",
@@ -65,4 +79,8 @@ __all__ = [
     "ClaimType", "AuthorityResult", "AuthorityDecision", "AuthorityEngineError",
     "PotentialConflict", "APPROVED_LICENSE_BASES",
     "evaluate_source_authority", "flag_potential_conflict",
+    "LookupStatus", "ReferenceDataError", "ValidationRejection",
+    "HCPCSRecord", "ICD10Record", "NCCIPairRecord", "ReferenceSnapshot",
+    "LookupResult", "ReferenceStore",
+    "validate_hcpcs_record", "validate_icd10_record", "validate_ncci_pair_record",
 ]
