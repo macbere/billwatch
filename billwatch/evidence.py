@@ -102,6 +102,11 @@ class Verification:
     hypothesis_id: str
     corroboration_result: str  # "corroborated" | "contradicted" | "silent"
     citation_ref: Optional[str] = None
+    authority_result: Optional[str] = None  # Build 4D correction: preserves
+    # the actual AuthorityResult.value (e.g. "authoritative", "corroborating",
+    # "admissible") that produced corroboration_result, so adjudication is
+    # never forced to rely on a collapsed label alone. Optional/defaulted
+    # for backward compatibility with any Verification constructed without it.
     id: str = field(default_factory=_new_id)
 
 
