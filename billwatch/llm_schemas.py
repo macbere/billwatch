@@ -308,3 +308,96 @@ def parse_verification_candidate(raw_text: str, known_hypothesis_ids) -> Verific
         proposed_source_types=tuple(proposed),
         verification_rationale=rationale,
     )
+
+
+# ---------------------------------------------------------------------
+# Appeal draft candidate (Build 4E)
+#
+# ADDITION ONLY -- does not alter any existing contract above. Reuses
+# _parse_json_object() and the general domain-decision-rejection
+# principle, but with its own, appeal-scoped forbidden-field set rather
+# than modifying the shared _DOMAIN_DECISION_FIELDS/_find_domain_decision_
+# fields() used by extraction/hypothesis/verification, to guarantee zero
+# risk to those three existing, already-tested contracts.
+# ---------------------------------------------------------------------
+
+_APPEAL_FORBIDDEN_FIELDS = frozenset({
+    "final_status", "case_scope", "casescope", "authority", "authority_level",
+    "authority_result", "appeal_eligible", "appeal_eligibility",
+    "supported_discrepancy", "no_supported_discrepancy",
+    "insufficient_evidence", "conflicting_evidence",
+    # Build 4E additions, per this build's explicit authorization:
+    "recommended_status", "adjudication", "adjudication_result",
+    "authority_decision", "verdict", "confidence",
+})
+
+
+def _find_appeal_forbidden_fields(obj, path=""):
+    found = []
+    if isinstance(obj, dict):
+        for k, v in obj.items():
+            key_path = f"{path}.{k}" if path else str(k)
+            if isinstance(k, str) and k.lower() in _APPEAL_FORBIDDEN_FIELDS:
+                found.append(key_path)
+            found.extend(_find_appeal_forbidden_fields(v, key_path))
+    elif isinstance(obj, list):
+        for i, item in enumerate(obj):
+            found.extend(_find_appeal_forbidden_fields(item, f"{path}[{i}]"))
+    return found
+
+
+@dataclass(frozen=True)
+class AppealDraftCandidate:
+    draft_text: str
+    cited_fact_ids: tuple
+    cited_claim_ids: tuple
+
+
+def parse_appeal_draft_candidate(raw_text: str, known_fact_ids, known_claim_ids) -> AppealDraftCandidate:
+    """
+    known_fact_ids / known_claim_ids must be the real sets of fact/claim
+    ids already present in the ledger. Any citation not in those sets
+    rejects the ENTIRE candidate -- never silently dropped, repaired, or
+    invented, per this build's explicit requirement.
+    """
+    raw = _parse_json_object(raw_text, "appeal draft candidate")
+
+    forbidden_found = _find_appeal_forbidden_fields(raw)
+    if forbidden_found:
+        raise SchemaValidationError(
+            f"appeal draft candidate: candidate rejected in full -- "
+            f"domain-decision field(s) found at {forbidden_found!r}. An "
+            "appeal draft may never carry final_status, a recommended "
+            "status, an adjudication/authority decision, a verdict, or a "
+            "confidence level intended to determine the outcome."
+        )
+
+    draft_text = raw.get("draft_text")
+    if not isinstance(draft_text, str) or not draft_text.strip():
+        raise SchemaValidationError("appeal draft candidate: draft_text must be a non-empty string")
+
+    cited_fact_ids = raw.get("cited_fact_ids", [])
+    if not isinstance(cited_fact_ids, list) or not all(isinstance(x, str) for x in cited_fact_ids):
+        raise SchemaValidationError("appeal draft candidate: cited_fact_ids must be a list of strings")
+    unknown_facts = [fid for fid in cited_fact_ids if fid not in known_fact_ids]
+    if unknown_facts:
+        raise SchemaValidationError(
+            f"appeal draft candidate: cites unknown fact_id(s) {unknown_facts!r}; "
+            "candidate rejected in full, not repaired"
+        )
+
+    cited_claim_ids = raw.get("cited_claim_ids", [])
+    if not isinstance(cited_claim_ids, list) or not all(isinstance(x, str) for x in cited_claim_ids):
+        raise SchemaValidationError("appeal draft candidate: cited_claim_ids must be a list of strings")
+    unknown_claims = [cid for cid in cited_claim_ids if cid not in known_claim_ids]
+    if unknown_claims:
+        raise SchemaValidationError(
+            f"appeal draft candidate: cites unknown claim_id(s) {unknown_claims!r}; "
+            "candidate rejected in full, not repaired"
+        )
+
+    return AppealDraftCandidate(
+        draft_text=draft_text.strip(),
+        cited_fact_ids=tuple(cited_fact_ids),
+        cited_claim_ids=tuple(cited_claim_ids),
+    )
