@@ -9,6 +9,7 @@ import json
 import os
 import re
 from http.server import BaseHTTPRequestHandler, HTTPServer
+from urllib.parse import urlsplit
 
 from billwatch import Document, Investigation
 from billwatch.case_scope import establish_from_user_selection
@@ -80,6 +81,13 @@ def _run_demo_investigation():
     return payload
 
 
+def route_path(raw_path):
+    """Return only the path component of a request target, discarding any
+    query string or fragment. '/?utm_source=x' and '/' both route to '/'.
+    """
+    return urlsplit(raw_path).path
+
+
 INDEX_HTML = """<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -114,6 +122,7 @@ INDEX_HTML = """<!DOCTYPE html>
   button.primary:disabled{opacity:.6;cursor:default;transform:none;}
   button.ghost{background:transparent;color:var(--text);border:1px solid var(--border);padding:14px 24px;
     border-radius:12px;font-size:16px;font-weight:600;cursor:pointer;}
+  button:focus-visible, a:focus-visible{outline:3px solid var(--brand2);outline-offset:2px;}
   section{margin:36px 0;}
   .card{background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);padding:22px;}
   .pipeline{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;font-size:13px;color:var(--muted);}
@@ -135,9 +144,11 @@ INDEX_HTML = """<!DOCTYPE html>
   .badge.good{background:rgba(46,204,143,.15);color:var(--good);border:1px solid rgba(46,204,143,.4);}
   .badge.bad{background:rgba(255,103,103,.15);color:var(--bad);border:1px solid rgba(255,103,103,.4);}
   .badge.gemini{background:rgba(122,208,196,.15);color:var(--brand2);border:1px solid rgba(122,208,196,.4);}
-  .evidence{margin:16px 0;padding:14px;background:var(--panel2);border-radius:10px;border:1px solid var(--border);font-size:14px;}
-  .evidence code{background:rgba(255,255,255,.06);padding:2px 6px;border-radius:4px;}
-  .appeal-box{margin-top:16px;background:#fff;color:#1a1a1a;border-radius:12px;padding:20px;font-family:Georgia,serif;
+  .result-grid{display:flex;flex-direction:column;gap:14px;margin-top:16px;}
+  .result-block{padding:14px;background:var(--panel2);border-radius:10px;border:1px solid var(--border);font-size:14px;}
+  .result-block .label{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:6px;font-weight:700;}
+  .result-block code{background:rgba(255,255,255,.06);padding:2px 6px;border-radius:4px;}
+  .appeal-box{margin-top:8px;background:#fff;color:#1a1a1a;border-radius:12px;padding:20px;font-family:Georgia,serif;
     font-size:15px;line-height:1.6;white-space:pre-wrap;}
   .actions{display:flex;gap:10px;margin-top:14px;flex-wrap:wrap;}
   button.small{background:var(--panel2);color:var(--text);border:1px solid var(--border);padding:10px 16px;
@@ -159,14 +170,14 @@ INDEX_HTML = """<!DOCTYPE html>
     <h1>Find <span>billing errors</span><br>before you pay.</h1>
     <p>BillWatch investigates your medical bill against real coding and billing rules -- and only drafts an appeal when the evidence genuinely supports one.</p>
     <div class="cta-row">
-      <button class="primary" id="runDemoBtn" onclick="runDemo()">Run Live Demo</button>
-      <button class="ghost" onclick="document.getElementById('how').scrollIntoView({behavior:'smooth'})">How it works</button>
+      <button class="primary" id="runDemoBtn" onclick="runDemo()" aria-label="Run a live BillWatch investigation">Run Live Investigation</button>
+      <button class="ghost" onclick="document.getElementById('how').scrollIntoView({behavior:'smooth'})" aria-label="Jump to how BillWatch works">How BillWatch Works</button>
     </div>
   </section>
 
   <section id="how" class="card">
-    <h2>An agentic system with guardrails</h2>
-    <p class="muted">BillWatch never just asks an AI "is this bill wrong?" It moves through a controlled pipeline where every consequential decision is made by deterministic code -- not the model.</p>
+    <h2>AI doesn't decide alone</h2>
+    <p class="muted">BillWatch never just asks an AI "is this bill wrong?" It moves through a controlled pipeline where every consequential decision -- is a source authoritative, is evidence sufficient, is an appeal eligible -- is made by deterministic code, not the model. An appeal is only drafted after the pipeline itself reaches a supported-discrepancy state.</p>
     <div class="pipeline">
       <span class="step">Scope</span><span class="arrow">&rarr;</span>
       <span class="step">Evidence</span><span class="arrow">&rarr;</span>
@@ -178,8 +189,8 @@ INDEX_HTML = """<!DOCTYPE html>
 
   <section class="card">
     <h2>Live investigation</h2>
-    <p class="muted">This runs the real BillWatch pipeline against a demo bill (CPT codes 45378 + 45380 billed same date of service) -- the same backend that is deployed to production.</p>
-    <ul id="stages">
+    <p class="muted">This runs the real BillWatch pipeline against a demo bill (CPT codes 45378 + 45380 billed same date of service) -- the same backend deployed to production.</p>
+    <ul id="stages" aria-live="polite">
       <li data-stage="0"><span class="num">1</span> Bill received</li>
       <li data-stage="1"><span class="num">2</span> Scope checked</li>
       <li data-stage="2"><span class="num">3</span> Evidence analyzed</li>
@@ -187,7 +198,7 @@ INDEX_HTML = """<!DOCTYPE html>
       <li data-stage="4"><span class="num">5</span> Appeal prepared</li>
     </ul>
 
-    <div id="result"></div>
+    <div id="result" aria-live="polite"></div>
   </section>
 
   <footer>
@@ -215,8 +226,11 @@ async function runDemo(){
     }, 380);
   });
 
-  let data, errored = false;
-  const fetchPromise = fetch('/investigate').then(r => r.json()).then(j => data = j).catch(() => errored = true);
+  let data = null, errored = false;
+  const fetchPromise = fetch('/investigate')
+    .then(r => { if (!r.ok) throw new Error('bad status'); return r.json(); })
+    .then(j => data = j)
+    .catch(() => errored = true);
 
   for (let i = 0; i < stages.length; i++){ await reveal(i); }
   await fetchPromise;
@@ -224,11 +238,13 @@ async function runDemo(){
   stages[stages.length-1].classList.add('done');
 
   btn.disabled = false;
-  btn.textContent = 'Run Live Demo';
+  btn.textContent = 'Run Live Investigation';
   resultEl.style.display = 'block';
 
   if (errored || !data){
-    resultEl.innerHTML = '<div class="badge bad">Request failed</div><p class="muted" style="margin-top:10px;">Could not reach the investigation service. Please try again.</p>';
+    resultEl.innerHTML = '<div class="badge bad">Investigation temporarily unavailable</div>'
+      + '<p class="muted" style="margin-top:10px;">We could not reach the investigation service just now.</p>'
+      + '<div class="actions"><button class="small" onclick="runDemo()">Retry</button></div>';
     return;
   }
 
@@ -237,18 +253,25 @@ async function runDemo(){
     if (data.gemini_mode === 'live'){
       html += ' <span class="badge gemini">Gemini &mdash; LIVE</span>';
     }
-    html += '<div class="evidence">Codes <code>45378</code> and <code>45380</code> were billed together for the same date of service. Under CMS NCCI Procedure-to-Procedure edits, this code pair is treated as bundled -- billing them separately is a possible discrepancy.</div>';
+    html += '<div class="result-grid">';
+    html += '<div class="result-block"><div class="label">Detection</div>Codes <code>45378</code> and <code>45380</code> were billed together for the same date of service.</div>';
+    html += '<div class="result-block"><div class="label">Evidence</div>Under CMS NCCI Procedure-to-Procedure edits, this code pair is treated as bundled -- billing them separately is a possible discrepancy.</div>';
+    html += '<div class="result-block"><div class="label">Decision</div>SUPPORTED_DISCREPANCY, reached through the guarded Scope &rarr; Evidence &rarr; Verification pipeline.</div>';
     if (data.appeal_generated && data.appeal_draft){
-      html += '<h2 style="margin-top:22px;">Generated appeal</h2>';
-      html += '<div class="appeal-box" id="appealText">' + data.appeal_draft.replace(/</g,'&lt;') + '</div>';
-      html += '<div class="actions"><button class="small" onclick="copyAppeal()">Copy Appeal</button><button class="small" onclick="downloadAppeal()">Download Appeal</button></div>';
+      html += '<div class="result-block"><div class="label">Appeal</div><div class="appeal-box" id="appealText">' + data.appeal_draft.replace(/</g,'&lt;') + '</div>'
+        + '<div class="actions"><button class="small" onclick="copyAppeal()">Copy Appeal</button><button class="small" onclick="downloadAppeal()">Download Appeal</button></div></div>';
     }
+    html += '</div>';
     resultEl.innerHTML = html;
-  } else {
+  } else if (data.success === false || !data.success) {
     let html = '<div class="badge bad">No supported discrepancy</div>';
     html += '<p class="muted" style="margin-top:10px;">BillWatch did not generate an appeal because the evidence and state required to support one were not established';
     if (data.failed_stage){ html += ' (stopped at: <code>' + data.failed_stage + '</code>)'; }
     html += '.</p>';
+    resultEl.innerHTML = html;
+  } else {
+    let html = '<div class="badge bad">No supported discrepancy</div>';
+    html += '<p class="muted" style="margin-top:10px;">BillWatch completed the investigation but did not find a supported discrepancy (final status: <code>' + (data.final_status || 'unknown') + '</code>), so no appeal was generated.</p>';
     resultEl.innerHTML = html;
   }
 }
@@ -293,11 +316,12 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(body)
 
     def do_GET(self):
-        if self.path == "/":
+        path = route_path(self.path)
+        if path == "/":
             self._send_html(200, INDEX_HTML)
-        elif self.path == "/health":
+        elif path == "/health":
             self._send_json(200, {"status": "ok", "service": "billwatch"})
-        elif self.path == "/investigate":
+        elif path == "/investigate":
             try:
                 self._send_json(200, _run_demo_investigation())
             except Exception as exc:
