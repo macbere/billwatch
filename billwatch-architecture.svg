@@ -1,0 +1,78 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 1080" font-family="-apple-system,Helvetica,Arial,sans-serif">
+<style>
+  .box{fill:#111a2e;stroke:#22304d;stroke-width:2;rx:12;}
+  .gate{fill:#0f1830;stroke:#4f8dff;stroke-width:2;rx:12;}
+  .label{fill:#eaf0ff;font-size:16px;font-weight:600;}
+  .sub{fill:#93a2c4;font-size:12px;}
+  .arrow{stroke:#4f8dff;stroke-width:2;marker-end:url(#head);}
+  .title{fill:#eaf0ff;font-size:22px;font-weight:700;}
+</style>
+<rect width="720" height="1080" fill="#0b1220"/>
+<text x="360" y="40" text-anchor="middle" class="title">BillWatch Architecture</text>
+<defs>
+  <marker id="head" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto">
+    <path d="M0,0 L0,6 L9,3 z" fill="#4f8dff"/>
+  </marker>
+</defs>
+
+<rect x="260" y="70" width="200" height="50" class="box"/>
+<text x="360" y="100" text-anchor="middle" class="label">User (browser)</text>
+<line x1="360" y1="120" x2="360" y2="155" class="arrow"/>
+
+<rect x="230" y="160" width="260" height="55" class="box"/>
+<text x="360" y="185" text-anchor="middle" class="label">BillWatch Web UI</text>
+<text x="360" y="203" text-anchor="middle" class="sub">app.py -- embedded HTML/CSS/JS</text>
+<line x1="360" y1="215" x2="360" y2="250" class="arrow"/>
+
+<rect x="200" y="255" width="320" height="55" class="box"/>
+<text x="360" y="280" text-anchor="middle" class="label">Cloud Run / Python App</text>
+<text x="360" y="298" text-anchor="middle" class="sub">Google Cloud Run, us-central1</text>
+<line x1="360" y1="310" x2="360" y2="345" class="arrow"/>
+
+<rect x="150" y="350" width="420" height="200" class="box"/>
+<text x="360" y="375" text-anchor="middle" class="label">Deterministic Investigation Pipeline</text>
+
+<rect x="175" y="390" width="80" height="40" class="gate"/>
+<text x="215" y="415" text-anchor="middle" class="sub" fill="#eaf0ff">Scope</text>
+
+<rect x="270" y="390" width="90" height="40" class="gate"/>
+<text x="315" y="415" text-anchor="middle" class="sub" fill="#eaf0ff">Evidence</text>
+
+<rect x="375" y="390" width="110" height="40" class="gate"/>
+<text x="430" y="415" text-anchor="middle" class="sub" fill="#eaf0ff">Verification</text>
+
+<rect x="270" y="450" width="90" height="40" class="gate"/>
+<text x="315" y="475" text-anchor="middle" class="sub" fill="#eaf0ff">Decision</text>
+
+<text x="360" y="530" text-anchor="middle" class="sub">real HCPCS/ICD-10/NCCI-style reference lookups, pure Python adjudication</text>
+<line x1="360" y1="550" x2="360" y2="585" class="arrow"/>
+
+<rect x="180" y="590" width="360" height="55" class="gate"/>
+<text x="360" y="615" text-anchor="middle" class="label">Supported Discrepancy Gate</text>
+<text x="360" y="633" text-anchor="middle" class="sub">code-gated, not prompt-gated</text>
+<line x1="360" y1="645" x2="360" y2="680" class="arrow"/>
+
+<rect x="220" y="685" width="280" height="55" class="box"/>
+<text x="360" y="710" text-anchor="middle" class="label">Google GenAI SDK</text>
+<text x="360" y="728" text-anchor="middle" class="sub">google-genai==2.17.0</text>
+<line x1="360" y1="740" x2="360" y2="775" class="arrow"/>
+
+<rect x="220" y="780" width="280" height="55" class="box"/>
+<text x="360" y="805" text-anchor="middle" class="label">Gemini 3.5 Flash</text>
+<text x="360" y="823" text-anchor="middle" class="sub">gemini-3.5-flash</text>
+<line x1="360" y1="835" x2="360" y2="870" class="arrow"/>
+
+<rect x="220" y="875" width="280" height="55" class="box"/>
+<text x="360" y="900" text-anchor="middle" class="label">Appeal Draft</text>
+<text x="360" y="918" text-anchor="middle" class="sub">cites only real ledger facts/claims</text>
+<line x1="360" y1="930" x2="360" y2="965" class="arrow"/>
+
+<rect x="230" y="970" width="260" height="55" class="box"/>
+<text x="360" y="995" text-anchor="middle" class="label">Back to Web UI</text>
+<text x="360" y="1013" text-anchor="middle" class="sub">Copy Appeal / Download Appeal</text>
+
+<line x1="80" y1="380" x2="150" y2="380" class="arrow"/>
+<text x="20" y="365" class="sub">Env-based</text>
+<text x="20" y="380" class="sub">Gemini</text>
+<text x="20" y="395" class="sub">credential</text>
+</svg>
