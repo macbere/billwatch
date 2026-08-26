@@ -96,80 +96,106 @@ INDEX_HTML = """<!DOCTYPE html>
 <title>BillWatch -- Find billing errors before you pay.</title>
 <style>
   :root{
-    --bg:#0b1220; --panel:#111a2e; --panel2:#0f1830; --border:#22304d;
-    --text:#eaf0ff; --muted:#93a2c4; --brand:#4f8dff; --brand2:#7ad0c4;
-    --good:#2ecc8f; --bad:#ff6767; --warn:#f5b942;
-    --radius:16px;
+    --bg:#0a0f1a; --panel:#111826; --panel2:#0d1420; --border:#1f2937;
+    --border-soft:#182233;
+    --text:#e8ecf3; --muted:#8b95a8; --heading:#f4f6fa;
+    --accent:#3b6fd6; --accent-soft:#2a4d8f; --teal:#4a9d95;
+    --good:#2f9e6e; --good-bg:rgba(47,158,110,.10); --good-border:rgba(47,158,110,.35);
+    --bad:#c85a5a; --bad-bg:rgba(200,90,90,.10); --bad-border:rgba(200,90,90,.35);
+    --radius:10px; --radius-sm:7px;
   }
   *{box-sizing:border-box;}
-  body{margin:0;background:linear-gradient(180deg,#0b1220,#0d1526 60%,#0b1220);
+  body{margin:0;background:var(--bg);
     color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
-    line-height:1.5;-webkit-font-smoothing:antialiased;overflow-x:hidden;}
-  .wrap{max-width:860px;margin:0 auto;padding:0 20px;}
-  header{position:sticky;top:0;z-index:10;background:rgba(11,18,32,.9);backdrop-filter:blur(8px);
-    border-bottom:1px solid var(--border);}
-  .nav{display:flex;align-items:center;justify-content:space-between;padding:14px 20px;max-width:860px;margin:0 auto;}
-  .brand{display:flex;align-items:center;gap:8px;font-weight:700;font-size:18px;letter-spacing:-.02em;
-    background:none;border:none;padding:0;font-family:inherit;color:inherit;cursor:pointer;}
-  .brand .dot{width:10px;height:10px;border-radius:50%;background:var(--brand);box-shadow:0 0 12px var(--brand);}
-  .hero{padding:56px 0 28px;text-align:center;}
-  .hero h1{font-size:clamp(28px,6vw,44px);line-height:1.1;margin:0 0 14px;letter-spacing:-.02em;}
-  .hero h1 span{background:linear-gradient(90deg,var(--brand),var(--brand2));-webkit-background-clip:text;background-clip:text;color:transparent;}
-  .hero p{color:var(--muted);font-size:17px;max-width:520px;margin:0 auto 26px;}
+    line-height:1.6;-webkit-font-smoothing:antialiased;overflow-x:hidden;}
+  .wrap{max-width:820px;margin:0 auto;padding:0 20px;}
+  header{position:sticky;top:0;z-index:10;background:rgba(10,15,26,.94);backdrop-filter:blur(6px);
+    border-bottom:1px solid var(--border-soft);}
+  .nav{display:flex;align-items:center;justify-content:space-between;padding:16px 20px;max-width:820px;margin:0 auto;}
+  .brand{display:flex;align-items:center;gap:9px;font-weight:600;font-size:16px;letter-spacing:-.01em;
+    background:none;border:none;padding:0;font-family:inherit;color:var(--heading);cursor:pointer;}
+  .brand .mark{width:22px;height:22px;border-radius:6px;background:var(--accent);display:flex;
+    align-items:center;justify-content:center;color:#fff;font-size:12px;font-weight:700;flex-shrink:0;}
+  .tagline{color:var(--muted);font-size:12px;font-weight:500;letter-spacing:.02em;}
+  .hero{padding:64px 0 36px;text-align:center;}
+  .eyebrow{color:var(--teal);font-size:12px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;margin-bottom:16px;}
+  .hero h1{font-size:clamp(30px,5.5vw,42px);line-height:1.18;margin:0 0 16px;letter-spacing:-.02em;color:var(--heading);
+    font-weight:700;}
+  .hero h1 em{color:var(--accent);font-style:normal;}
+  .hero p{color:var(--muted);font-size:16px;max-width:480px;margin:0 auto 30px;line-height:1.65;}
   .cta-row{display:flex;gap:12px;justify-content:center;flex-wrap:wrap;}
-  button.primary,a.primary{background:var(--brand);color:#fff;border:none;padding:14px 24px;border-radius:12px;
-    font-size:16px;font-weight:600;cursor:pointer;box-shadow:0 8px 24px rgba(79,141,255,.35);transition:transform .15s;
-    min-height:48px;}
-  button.primary:hover{transform:translateY(-1px);}
-  button.primary:disabled{opacity:.6;cursor:default;transform:none;}
-  button.ghost{background:transparent;color:var(--text);border:1px solid var(--border);padding:14px 24px;
-    border-radius:12px;font-size:16px;font-weight:600;cursor:pointer;min-height:48px;}
-  button:focus-visible, a:focus-visible{outline:3px solid var(--brand2);outline-offset:2px;}
-  section{margin:36px 0;}
+  button.primary{background:var(--accent);color:#fff;border:1px solid var(--accent);padding:13px 26px;border-radius:var(--radius-sm);
+    font-size:15px;font-weight:600;cursor:pointer;transition:background .15s,border-color .15s;min-height:48px;}
+  button.primary:hover{background:#4d7fe0;}
+  button.primary:disabled{opacity:.55;cursor:default;}
+  button.ghost{background:transparent;color:var(--text);border:1px solid var(--border);padding:13px 26px;
+    border-radius:var(--radius-sm);font-size:15px;font-weight:600;cursor:pointer;min-height:48px;transition:border-color .15s;}
+  button.ghost:hover{border-color:var(--muted);}
+  button:focus-visible{outline:2px solid var(--teal);outline-offset:2px;}
+  section{margin:32px 0;}
   section[id]{scroll-margin-top:76px;}
-  .card{background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);padding:22px;}
-  .pipeline{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;font-size:13px;color:var(--muted);}
-  .pipeline .step{background:var(--panel2);border:1px solid var(--border);border-radius:999px;padding:8px 14px;white-space:nowrap;}
-  .pipeline .arrow{align-self:center;color:var(--border);}
-  h2{font-size:20px;margin:0 0 6px;}
-  .muted{color:var(--muted);font-size:14px;}
-  #stages{list-style:none;padding:0;margin:18px 0 0;display:flex;flex-direction:column;gap:10px;}
-  #stages li{display:flex;align-items:center;gap:12px;padding:12px 14px;border-radius:10px;background:var(--panel2);
-    border:1px solid var(--border);opacity:.35;transition:opacity .25s,background .25s;font-size:14px;}
-  #stages li.active{opacity:1;border-color:var(--brand);}
-  #stages li.done{opacity:1;}
-  #stages li .num{width:22px;height:22px;border-radius:50%;background:var(--border);display:flex;align-items:center;
-    justify-content:center;font-size:11px;font-weight:700;flex-shrink:0;}
-  #stages li.done .num{background:var(--good);color:#06210f;}
-  #stages li.active .num{background:var(--brand);color:#fff;}
-  #result{margin-top:20px;display:none;}
-  .badge{display:inline-flex;align-items:center;gap:6px;padding:6px 12px;border-radius:999px;font-size:13px;font-weight:700;}
-  .badge.good{background:rgba(46,204,143,.15);color:var(--good);border:1px solid rgba(46,204,143,.4);}
-  .badge.bad{background:rgba(255,103,103,.15);color:var(--bad);border:1px solid rgba(255,103,103,.4);}
-  .badge.gemini{background:rgba(122,208,196,.15);color:var(--brand2);border:1px solid rgba(122,208,196,.4);}
-  .result-grid{display:flex;flex-direction:column;gap:14px;margin-top:16px;}
-  .result-block{padding:14px;background:var(--panel2);border-radius:10px;border:1px solid var(--border);font-size:14px;}
-  .result-block .label{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:6px;font-weight:700;}
-  .result-block code{background:rgba(255,255,255,.06);padding:2px 6px;border-radius:4px;word-break:break-word;}
-  .appeal-box{margin-top:8px;background:#fff;color:#1a1a1a;border-radius:12px;padding:20px;font-family:Georgia,serif;
-    font-size:15px;line-height:1.6;white-space:pre-wrap;word-break:break-word;}
+  .card{background:var(--panel);border:1px solid var(--border-soft);border-radius:var(--radius);padding:26px 24px;}
+  .card h2{margin:0 0 10px;}
+  .kicker{font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--teal);margin-bottom:8px;}
+  h2{font-size:19px;margin:0 0 6px;color:var(--heading);font-weight:650;letter-spacing:-.01em;}
+  .muted{color:var(--muted);font-size:14.5px;line-height:1.65;}
+  .pipeline{display:flex;flex-wrap:wrap;gap:6px;justify-content:center;margin-top:20px;}
+  .pipeline .step{background:var(--panel2);border:1px solid var(--border);color:var(--text);
+    border-radius:6px;padding:9px 15px;font-size:13px;font-weight:600;white-space:nowrap;}
+  .pipeline .arrow{align-self:center;color:var(--border);font-size:13px;}
+  #stages{list-style:none;padding:0;margin:20px 0 0;display:flex;flex-direction:column;gap:8px;}
+  #stages li{display:flex;align-items:center;gap:13px;padding:13px 16px;border-radius:var(--radius-sm);background:var(--panel2);
+    border:1px solid var(--border);opacity:.4;transition:opacity .25s,border-color .25s;font-size:14px;font-weight:500;}
+  #stages li.active{opacity:1;border-color:var(--accent);}
+  #stages li.done{opacity:1;border-color:var(--good-border);}
+  #stages li .num{width:24px;height:24px;border-radius:6px;background:var(--border);display:flex;align-items:center;
+    justify-content:center;font-size:11px;font-weight:700;flex-shrink:0;color:var(--muted);}
+  #stages li.done .num{background:var(--good);color:#fff;}
+  #stages li.active .num{background:var(--accent);color:#fff;}
+  #result{margin-top:22px;display:none;}
+  .badge{display:inline-flex;align-items:center;gap:6px;padding:7px 14px;border-radius:6px;font-size:13px;font-weight:700;
+    letter-spacing:-.01em;}
+  .badge.good{background:var(--good-bg);color:var(--good);border:1px solid var(--good-border);}
+  .badge.bad{background:var(--bad-bg);color:var(--bad);border:1px solid var(--bad-border);}
+  .badge.gemini{background:rgba(74,157,149,.10);color:var(--teal);border:1px solid rgba(74,157,149,.35);}
+  .result-grid{display:flex;flex-direction:column;gap:12px;margin-top:18px;}
+  .result-block{padding:15px 16px;background:var(--panel2);border-radius:var(--radius-sm);border:1px solid var(--border);
+    border-left:3px solid var(--border);font-size:14.5px;line-height:1.6;}
+  .result-block.detection{border-left-color:var(--accent);}
+  .result-block.evidence{border-left-color:var(--teal);}
+  .result-block.decision{border-left-color:var(--good);}
+  .result-block .label{font-size:10.5px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);
+    margin-bottom:7px;font-weight:700;}
+  .result-block code{background:rgba(255,255,255,.05);padding:2px 6px;border-radius:4px;word-break:break-word;
+    font-size:13px;}
+  .appeal-card{margin-top:8px;background:#f7f5f0;color:#1c1c1c;border-radius:var(--radius-sm);overflow:hidden;
+    border:1px solid #d8d3c5;}
+  .appeal-head{padding:14px 20px;border-bottom:1px solid #d8d3c5;background:#efece3;
+    font-size:11px;letter-spacing:.08em;text-transform:uppercase;font-weight:700;color:#6b6355;}
+  .appeal-body{padding:22px;font-family:Georgia,"Times New Roman",serif;font-size:15px;line-height:1.7;
+    white-space:pre-wrap;word-break:break-word;}
   .actions{display:flex;gap:10px;margin-top:14px;flex-wrap:wrap;}
-  button.small{background:var(--panel2);color:var(--text);border:1px solid var(--border);padding:10px 16px;
-    border-radius:10px;font-size:14px;cursor:pointer;min-height:44px;}
-  button.small:hover{border-color:var(--brand);}
-  footer{padding:40px 0 60px;text-align:center;color:var(--muted);font-size:13px;}
-  @media (max-width:480px){ .cta-row{flex-direction:column;} button.primary,a.primary,button.ghost{width:100%;} }
+  button.small{background:var(--panel2);color:var(--text);border:1px solid var(--border);padding:10px 18px;
+    border-radius:var(--radius-sm);font-size:13.5px;font-weight:600;cursor:pointer;min-height:44px;transition:border-color .15s;}
+  button.small:hover{border-color:var(--accent);}
+  footer{padding:44px 0 56px;text-align:center;color:var(--muted);font-size:12.5px;border-top:1px solid var(--border-soft);
+    margin-top:12px;}
+  @media (max-width:480px){ .cta-row{flex-direction:column;} button.primary,button.ghost{width:100%;}
+    .card{padding:22px 18px;} .hero{padding:48px 0 28px;} }
 </style>
 </head>
 <body>
 <header><div class="nav">
-  <button type="button" id="brandBtn" class="brand" aria-label="Scroll to top of page"><span class="dot"></span> BillWatch</button>
-  <div class="muted" style="font-size:13px;">All Things Agentic Hackathon</div>
+  <button type="button" id="brandBtn" class="brand" aria-label="Scroll to top of page">
+    <span class="mark">B</span> BillWatch
+  </button>
+  <div class="tagline">All Things Agentic Hackathon</div>
 </div></header>
 
 <div class="wrap">
   <section class="hero">
-    <h1>Find <span>billing errors</span><br>before you pay.</h1>
+    <div class="eyebrow">Medical Billing Investigation</div>
+    <h1>Find <em>billing errors</em><br>before you pay.</h1>
     <p>BillWatch investigates your medical bill against real coding and billing rules -- and only drafts an appeal when the evidence genuinely supports one.</p>
     <div class="cta-row">
       <button type="button" class="primary" id="runDemoBtn" aria-label="Run a live BillWatch investigation">Run Live Investigation</button>
@@ -178,6 +204,7 @@ INDEX_HTML = """<!DOCTYPE html>
   </section>
 
   <section id="how" class="card">
+    <div class="kicker">Architecture</div>
     <h2>AI doesn't decide alone</h2>
     <p class="muted">BillWatch never just asks an AI "is this bill wrong?" It moves through a controlled pipeline where every consequential decision -- is a source authoritative, is evidence sufficient, is an appeal eligible -- is made by deterministic code, not the model. An appeal is only drafted after the pipeline itself reaches a supported-discrepancy state.</p>
     <div class="pipeline">
@@ -190,6 +217,7 @@ INDEX_HTML = """<!DOCTYPE html>
   </section>
 
   <section id="investigation" class="card">
+    <div class="kicker">Live Demo</div>
     <h2>Live investigation</h2>
     <p class="muted">This runs the real BillWatch pipeline against a demo bill (CPT codes 45378 + 45380 billed same date of service) -- the same backend deployed to production.</p>
     <ul id="stages" aria-live="polite">
@@ -271,12 +299,17 @@ INDEX_HTML = """<!DOCTYPE html>
         html += ' <span class="badge gemini">Gemini &mdash; LIVE</span>';
       }
       html += '<div class="result-grid">';
-      html += '<div class="result-block"><div class="label">Detection</div>Codes <code>45378</code> and <code>45380</code> were billed together for the same date of service.</div>';
-      html += '<div class="result-block"><div class="label">Evidence</div>Under CMS NCCI Procedure-to-Procedure edits, this code pair is treated as bundled -- billing them separately is a possible discrepancy.</div>';
-      html += '<div class="result-block"><div class="label">Decision</div>SUPPORTED_DISCREPANCY, reached through the guarded Scope &rarr; Evidence &rarr; Verification pipeline.</div>';
+      html += '<div class="result-block detection"><div class="label">Detection</div>Codes <code>45378</code> and <code>45380</code> were billed together for the same date of service.</div>';
+      html += '<div class="result-block evidence"><div class="label">Evidence</div>Under CMS NCCI Procedure-to-Procedure edits, this code pair is treated as bundled -- billing them separately is a possible discrepancy.</div>';
+      html += '<div class="result-block decision"><div class="label">Decision</div>SUPPORTED_DISCREPANCY, reached through the guarded Scope &rarr; Evidence &rarr; Verification pipeline.</div>';
       if (data.appeal_generated && data.appeal_draft){
-        html += '<div class="result-block"><div class="label">Appeal</div><div class="appeal-box" id="appealText">' + escapeHtml(data.appeal_draft) + '</div>'
-          + '<div class="actions"><button type="button" class="small" data-action="copy">Copy Appeal</button><button type="button" class="small" data-action="download">Download Appeal</button></div></div>';
+        html += '<div>'
+          + '<div class="appeal-card">'
+          + '<div class="appeal-head">Draft Appeal &middot; For Human Review</div>'
+          + '<div class="appeal-body" id="appealText">' + escapeHtml(data.appeal_draft) + '</div>'
+          + '</div>'
+          + '<div class="actions"><button type="button" class="small" data-action="copy">Copy Appeal</button><button type="button" class="small" data-action="download">Download Appeal</button></div>'
+          + '</div>';
       }
       html += '</div>';
       resultEl.innerHTML = html;
