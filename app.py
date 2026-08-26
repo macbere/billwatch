@@ -104,12 +104,13 @@ INDEX_HTML = """<!DOCTYPE html>
   *{box-sizing:border-box;}
   body{margin:0;background:linear-gradient(180deg,#0b1220,#0d1526 60%,#0b1220);
     color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
-    line-height:1.5;-webkit-font-smoothing:antialiased;}
+    line-height:1.5;-webkit-font-smoothing:antialiased;overflow-x:hidden;}
   .wrap{max-width:860px;margin:0 auto;padding:0 20px;}
-  header{position:sticky;top:0;z-index:10;background:rgba(11,18,32,.85);backdrop-filter:blur(8px);
+  header{position:sticky;top:0;z-index:10;background:rgba(11,18,32,.9);backdrop-filter:blur(8px);
     border-bottom:1px solid var(--border);}
   .nav{display:flex;align-items:center;justify-content:space-between;padding:14px 20px;max-width:860px;margin:0 auto;}
-  .brand{display:flex;align-items:center;gap:8px;font-weight:700;font-size:18px;letter-spacing:-.02em;}
+  .brand{display:flex;align-items:center;gap:8px;font-weight:700;font-size:18px;letter-spacing:-.02em;
+    background:none;border:none;padding:0;font-family:inherit;color:inherit;cursor:pointer;}
   .brand .dot{width:10px;height:10px;border-radius:50%;background:var(--brand);box-shadow:0 0 12px var(--brand);}
   .hero{padding:56px 0 28px;text-align:center;}
   .hero h1{font-size:clamp(28px,6vw,44px);line-height:1.1;margin:0 0 14px;letter-spacing:-.02em;}
@@ -117,13 +118,15 @@ INDEX_HTML = """<!DOCTYPE html>
   .hero p{color:var(--muted);font-size:17px;max-width:520px;margin:0 auto 26px;}
   .cta-row{display:flex;gap:12px;justify-content:center;flex-wrap:wrap;}
   button.primary,a.primary{background:var(--brand);color:#fff;border:none;padding:14px 24px;border-radius:12px;
-    font-size:16px;font-weight:600;cursor:pointer;box-shadow:0 8px 24px rgba(79,141,255,.35);transition:transform .15s;}
+    font-size:16px;font-weight:600;cursor:pointer;box-shadow:0 8px 24px rgba(79,141,255,.35);transition:transform .15s;
+    min-height:48px;}
   button.primary:hover{transform:translateY(-1px);}
   button.primary:disabled{opacity:.6;cursor:default;transform:none;}
   button.ghost{background:transparent;color:var(--text);border:1px solid var(--border);padding:14px 24px;
-    border-radius:12px;font-size:16px;font-weight:600;cursor:pointer;}
+    border-radius:12px;font-size:16px;font-weight:600;cursor:pointer;min-height:48px;}
   button:focus-visible, a:focus-visible{outline:3px solid var(--brand2);outline-offset:2px;}
   section{margin:36px 0;}
+  section[id]{scroll-margin-top:76px;}
   .card{background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);padding:22px;}
   .pipeline{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;font-size:13px;color:var(--muted);}
   .pipeline .step{background:var(--panel2);border:1px solid var(--border);border-radius:999px;padding:8px 14px;white-space:nowrap;}
@@ -147,21 +150,20 @@ INDEX_HTML = """<!DOCTYPE html>
   .result-grid{display:flex;flex-direction:column;gap:14px;margin-top:16px;}
   .result-block{padding:14px;background:var(--panel2);border-radius:10px;border:1px solid var(--border);font-size:14px;}
   .result-block .label{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:6px;font-weight:700;}
-  .result-block code{background:rgba(255,255,255,.06);padding:2px 6px;border-radius:4px;}
+  .result-block code{background:rgba(255,255,255,.06);padding:2px 6px;border-radius:4px;word-break:break-word;}
   .appeal-box{margin-top:8px;background:#fff;color:#1a1a1a;border-radius:12px;padding:20px;font-family:Georgia,serif;
-    font-size:15px;line-height:1.6;white-space:pre-wrap;}
+    font-size:15px;line-height:1.6;white-space:pre-wrap;word-break:break-word;}
   .actions{display:flex;gap:10px;margin-top:14px;flex-wrap:wrap;}
   button.small{background:var(--panel2);color:var(--text);border:1px solid var(--border);padding:10px 16px;
-    border-radius:10px;font-size:14px;cursor:pointer;}
+    border-radius:10px;font-size:14px;cursor:pointer;min-height:44px;}
   button.small:hover{border-color:var(--brand);}
   footer{padding:40px 0 60px;text-align:center;color:var(--muted);font-size:13px;}
-  footer a{color:var(--brand2);text-decoration:none;}
   @media (max-width:480px){ .cta-row{flex-direction:column;} button.primary,a.primary,button.ghost{width:100%;} }
 </style>
 </head>
 <body>
 <header><div class="nav">
-  <div class="brand"><span class="dot"></span> BillWatch</div>
+  <button type="button" id="brandBtn" class="brand" aria-label="Scroll to top of page"><span class="dot"></span> BillWatch</button>
   <div class="muted" style="font-size:13px;">All Things Agentic Hackathon</div>
 </div></header>
 
@@ -170,8 +172,8 @@ INDEX_HTML = """<!DOCTYPE html>
     <h1>Find <span>billing errors</span><br>before you pay.</h1>
     <p>BillWatch investigates your medical bill against real coding and billing rules -- and only drafts an appeal when the evidence genuinely supports one.</p>
     <div class="cta-row">
-      <button class="primary" id="runDemoBtn" onclick="runDemo()" aria-label="Run a live BillWatch investigation">Run Live Investigation</button>
-      <button class="ghost" onclick="document.getElementById('how').scrollIntoView({behavior:'smooth'})" aria-label="Jump to how BillWatch works">How BillWatch Works</button>
+      <button type="button" class="primary" id="runDemoBtn" aria-label="Run a live BillWatch investigation">Run Live Investigation</button>
+      <button type="button" class="ghost" id="howBtn" aria-label="Jump to how BillWatch works">How BillWatch Works</button>
     </div>
   </section>
 
@@ -187,7 +189,7 @@ INDEX_HTML = """<!DOCTYPE html>
     </div>
   </section>
 
-  <section class="card">
+  <section id="investigation" class="card">
     <h2>Live investigation</h2>
     <p class="muted">This runs the real BillWatch pipeline against a demo bill (CPT codes 45378 + 45380 billed same date of service) -- the same backend deployed to production.</p>
     <ul id="stages" aria-live="polite">
@@ -207,92 +209,144 @@ INDEX_HTML = """<!DOCTYPE html>
 </div>
 
 <script>
-async function runDemo(){
-  const btn = document.getElementById('runDemoBtn');
-  const stages = document.querySelectorAll('#stages li');
-  const resultEl = document.getElementById('result');
-  btn.disabled = true;
-  btn.textContent = 'Investigating...';
-  resultEl.style.display = 'none';
-  resultEl.innerHTML = '';
-  stages.forEach(li => li.classList.remove('active','done'));
+(function(){
+  "use strict";
 
-  const reveal = (i) => new Promise(res => {
-    setTimeout(() => {
-      if (i > 0) stages[i-1].classList.remove('active');
-      if (i > 0) stages[i-1].classList.add('done');
-      if (i < stages.length) stages[i].classList.add('active');
-      res();
-    }, 380);
-  });
-
-  let data = null, errored = false;
-  const fetchPromise = fetch('/investigate')
-    .then(r => { if (!r.ok) throw new Error('bad status'); return r.json(); })
-    .then(j => data = j)
-    .catch(() => errored = true);
-
-  for (let i = 0; i < stages.length; i++){ await reveal(i); }
-  await fetchPromise;
-  stages[stages.length-1].classList.remove('active');
-  stages[stages.length-1].classList.add('done');
-
-  btn.disabled = false;
-  btn.textContent = 'Run Live Investigation';
-  resultEl.style.display = 'block';
-
-  if (errored || !data){
-    resultEl.innerHTML = '<div class="badge bad">Investigation temporarily unavailable</div>'
-      + '<p class="muted" style="margin-top:10px;">We could not reach the investigation service just now.</p>'
-      + '<div class="actions"><button class="small" onclick="runDemo()">Retry</button></div>';
-    return;
+  function prefersReducedMotion(){
+    return !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
   }
 
-  if (data.success && data.final_status === 'supported_discrepancy'){
-    let html = '<div class="badge good">&#10003; Supported discrepancy</div>';
-    if (data.gemini_mode === 'live'){
-      html += ' <span class="badge gemini">Gemini &mdash; LIVE</span>';
-    }
-    html += '<div class="result-grid">';
-    html += '<div class="result-block"><div class="label">Detection</div>Codes <code>45378</code> and <code>45380</code> were billed together for the same date of service.</div>';
-    html += '<div class="result-block"><div class="label">Evidence</div>Under CMS NCCI Procedure-to-Procedure edits, this code pair is treated as bundled -- billing them separately is a possible discrepancy.</div>';
-    html += '<div class="result-block"><div class="label">Decision</div>SUPPORTED_DISCREPANCY, reached through the guarded Scope &rarr; Evidence &rarr; Verification pipeline.</div>';
-    if (data.appeal_generated && data.appeal_draft){
-      html += '<div class="result-block"><div class="label">Appeal</div><div class="appeal-box" id="appealText">' + data.appeal_draft.replace(/</g,'&lt;') + '</div>'
-        + '<div class="actions"><button class="small" onclick="copyAppeal()">Copy Appeal</button><button class="small" onclick="downloadAppeal()">Download Appeal</button></div></div>';
-    }
-    html += '</div>';
-    resultEl.innerHTML = html;
-  } else if (data.success === false || !data.success) {
-    let html = '<div class="badge bad">No supported discrepancy</div>';
-    html += '<p class="muted" style="margin-top:10px;">BillWatch did not generate an appeal because the evidence and state required to support one were not established';
-    if (data.failed_stage){ html += ' (stopped at: <code>' + data.failed_stage + '</code>)'; }
-    html += '.</p>';
-    resultEl.innerHTML = html;
-  } else {
-    let html = '<div class="badge bad">No supported discrepancy</div>';
-    html += '<p class="muted" style="margin-top:10px;">BillWatch completed the investigation but did not find a supported discrepancy (final status: <code>' + (data.final_status || 'unknown') + '</code>), so no appeal was generated.</p>';
-    resultEl.innerHTML = html;
+  function escapeHtml(s){
+    return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
   }
-}
 
-function copyAppeal(){
-  const text = document.getElementById('appealText').innerText;
-  navigator.clipboard.writeText(text).then(() => {
-    const btns = document.querySelectorAll('.actions .small');
-    if (btns[0]){ const orig = btns[0].textContent; btns[0].textContent = 'Copied!'; setTimeout(()=>btns[0].textContent = orig, 1500); }
+  async function runDemo(){
+    var btn = document.getElementById("runDemoBtn");
+    var stages = document.querySelectorAll("#stages li");
+    var resultEl = document.getElementById("result");
+    if (!btn || btn.disabled) return;
+    btn.disabled = true;
+    btn.textContent = "Investigating...";
+    resultEl.style.display = "none";
+    resultEl.innerHTML = "";
+    stages.forEach(function(li){ li.classList.remove("active","done"); });
+
+    function reveal(i){
+      return new Promise(function(res){
+        setTimeout(function(){
+          if (i > 0){ stages[i-1].classList.remove("active"); stages[i-1].classList.add("done"); }
+          if (i < stages.length){ stages[i].classList.add("active"); }
+          res();
+        }, 380);
+      });
+    }
+
+    var data = null, errored = false;
+    var fetchPromise = fetch("/investigate").then(function(r){
+      if (!r.ok) throw new Error("bad status");
+      return r.json();
+    }).then(function(j){ data = j; }).catch(function(){ errored = true; });
+
+    for (var i = 0; i < stages.length; i++){ await reveal(i); }
+    await fetchPromise;
+    if (stages.length){
+      stages[stages.length-1].classList.remove("active");
+      stages[stages.length-1].classList.add("done");
+    }
+
+    btn.disabled = false;
+    btn.textContent = "Run Live Investigation";
+    resultEl.style.display = "block";
+
+    if (errored || !data){
+      resultEl.innerHTML = '<div class="badge bad">Investigation temporarily unavailable</div>'
+        + '<p class="muted" style="margin-top:10px;">We could not reach the investigation service just now.</p>'
+        + '<div class="actions"><button type="button" class="small" data-action="retry">Retry</button></div>';
+      return;
+    }
+
+    if (data.success && data.final_status === "supported_discrepancy"){
+      var html = '<div class="badge good">&#10003; Supported discrepancy</div>';
+      if (data.gemini_mode === "live"){
+        html += ' <span class="badge gemini">Gemini &mdash; LIVE</span>';
+      }
+      html += '<div class="result-grid">';
+      html += '<div class="result-block"><div class="label">Detection</div>Codes <code>45378</code> and <code>45380</code> were billed together for the same date of service.</div>';
+      html += '<div class="result-block"><div class="label">Evidence</div>Under CMS NCCI Procedure-to-Procedure edits, this code pair is treated as bundled -- billing them separately is a possible discrepancy.</div>';
+      html += '<div class="result-block"><div class="label">Decision</div>SUPPORTED_DISCREPANCY, reached through the guarded Scope &rarr; Evidence &rarr; Verification pipeline.</div>';
+      if (data.appeal_generated && data.appeal_draft){
+        html += '<div class="result-block"><div class="label">Appeal</div><div class="appeal-box" id="appealText">' + escapeHtml(data.appeal_draft) + '</div>'
+          + '<div class="actions"><button type="button" class="small" data-action="copy">Copy Appeal</button><button type="button" class="small" data-action="download">Download Appeal</button></div></div>';
+      }
+      html += '</div>';
+      resultEl.innerHTML = html;
+    } else {
+      var html2 = '<div class="badge bad">No supported discrepancy</div>';
+      html2 += '<p class="muted" style="margin-top:10px;">BillWatch did not generate an appeal because the evidence and state required to support one were not established';
+      if (data.failed_stage){ html2 += " (stopped at: <code>" + escapeHtml(String(data.failed_stage)) + "</code>)"; }
+      html2 += ".</p>";
+      resultEl.innerHTML = html2;
+    }
+  }
+
+  function copyAppeal(){
+    var el = document.getElementById("appealText");
+    if (!el) return;
+    var text = el.innerText;
+    if (navigator.clipboard && navigator.clipboard.writeText){
+      navigator.clipboard.writeText(text).then(function(){
+        var btns = document.querySelectorAll('.actions [data-action="copy"]');
+        if (btns[0]){ var orig = btns[0].textContent; btns[0].textContent = "Copied!"; setTimeout(function(){ btns[0].textContent = orig; }, 1500); }
+      });
+    }
+  }
+
+  function downloadAppeal(){
+    var el = document.getElementById("appealText");
+    if (!el) return;
+    var text = el.innerText;
+    var blob = new Blob([text], {type:"text/plain"});
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement("a");
+    a.href = url; a.download = "billwatch-appeal.txt";
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }
+
+  document.addEventListener("DOMContentLoaded", function(){
+    var brandBtn = document.getElementById("brandBtn");
+    var runBtn = document.getElementById("runDemoBtn");
+    var howBtn = document.getElementById("howBtn");
+    var resultEl = document.getElementById("result");
+
+    if (brandBtn){
+      brandBtn.addEventListener("click", function(){
+        window.scrollTo({top:0, behavior: prefersReducedMotion() ? "auto" : "smooth"});
+      });
+    }
+    if (howBtn){
+      howBtn.addEventListener("click", function(){
+        var target = document.getElementById("how");
+        if (target){
+          target.scrollIntoView({behavior: prefersReducedMotion() ? "auto" : "smooth", block:"start"});
+        }
+      });
+    }
+    if (runBtn){
+      runBtn.addEventListener("click", runDemo);
+    }
+    if (resultEl){
+      resultEl.addEventListener("click", function(e){
+        var actionEl = e.target.closest ? e.target.closest("[data-action]") : null;
+        if (!actionEl) return;
+        var action = actionEl.getAttribute("data-action");
+        if (action === "copy") copyAppeal();
+        if (action === "download") downloadAppeal();
+        if (action === "retry") runDemo();
+      });
+    }
   });
-}
-
-function downloadAppeal(){
-  const text = document.getElementById('appealText').innerText;
-  const blob = new Blob([text], {type:'text/plain'});
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url; a.download = 'billwatch-appeal.txt';
-  document.body.appendChild(a); a.click(); document.body.removeChild(a);
-  URL.revokeObjectURL(url);
-}
+})();
 </script>
 </body>
 </html>"""
