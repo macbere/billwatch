@@ -170,11 +170,16 @@ class TestFailureWrapping(unittest.TestCase):
             provider.complete_json("sys", "user")
 
     def test_server_error_wrapped(self):
+        # 503/UNAVAILABLE is now retried up to _MAX_ATTEMPTS before this
+        # exception is ultimately raised; time.sleep is patched so this
+        # test does not actually sleep between retries. Assertion is
+        # unchanged from before the retry feature was added.
         exc = genai_errors.ServerError(code=503, response_json={"error": "unavailable"})
         fake = _FakeClient(exception=exc)
         provider = GenAISDKProvider(_client=fake)
-        with self.assertRaises(LLMProviderError):
-            provider.complete_json("sys", "user")
+        with mock.patch("billwatch.genai_sdk_provider.time.sleep"):
+            with self.assertRaises(LLMProviderError):
+                provider.complete_json("sys", "user")
 
     def test_httpx_connect_error_wrapped(self):
         exc = httpx.ConnectError("no route to host")
@@ -267,6 +272,134 @@ class TestCredentialHandling(unittest.TestCase):
         with self.assertRaises(LLMProviderError) as ctx:
             provider.complete_json("sys", "user")
         self.assertNotIn(secret, str(ctx.exception))
+
+
+# ---------------------------------------------------------------------
+# GROUP G -- Bounded 503/UNAVAILABLE retry (added this pass)
+# ---------------------------------------------------------------------
+class _SequenceFakeModels:
+    """Unlike _FakeModels, returns/raises a different result on each
+    successive call, consuming a pre-supplied list in order. Needed to
+    simulate '503 then success' and similar multi-call retry sequences
+    that the original single-shot _FakeClient cannot express."""
+
+    def __init__(self, results, capture=None):
+        self._results = list(results)
+        self._capture = capture
+        self.call_count = 0
+
+    def generate_content(self, *, model, contents, config):
+        self.call_count += 1
+        if self._capture is not None:
+            self._capture.setdefault("calls", []).append(
+                {"model": model, "contents": contents, "config": config}
+            )
+        if not self._results:
+            raise AssertionError("generate_content called more times than results provided")
+        result = self._results.pop(0)
+        if isinstance(result, BaseException):
+            raise result
+        return result
+
+
+class _SequenceFakeClient:
+    def __init__(self, results, capture=None):
+        self.models = _SequenceFakeModels(results, capture=capture)
+        self.closed = False
+
+    def close(self):
+        self.closed = True
+
+
+class TestBounded503Retry(unittest.TestCase):
+    """Bounded retry-with-backoff exclusively for transient Gemini
+    503/UNAVAILABLE server errors, added in direct response to repeated
+    empirically-observed production/local '503 UNAVAILABLE -- high
+    demand' failures. Max 3 total attempts (1 initial + 2 retries).
+    Non-503 errors and all other exception types are never retried --
+    fail-closed behavior is preserved. time.sleep is patched throughout
+    so these tests run instantly regardless of the real backoff delay."""
+
+    def _server_error(self, code=503, status="UNAVAILABLE"):
+        return genai_errors.ServerError(
+            code=code,
+            response_json={"error": {"code": code, "status": status, "message": "high demand"}},
+        )
+
+    def test_503_then_success_retries_once_and_returns_successful_response(self):
+        fake = _SequenceFakeClient(results=[self._server_error(), _FakeResponseWithText('{"ok": true}')])
+        provider = GenAISDKProvider(_client=fake)
+        with mock.patch("billwatch.genai_sdk_provider.time.sleep") as mock_sleep:
+            result = provider.complete_json("sys", "user")
+        self.assertEqual(result, '{"ok": true}')
+        self.assertEqual(fake.models.call_count, 2)
+        mock_sleep.assert_called_once()
+
+    def test_three_consecutive_503s_raise_llm_provider_error_after_max_attempts(self):
+        fake = _SequenceFakeClient(results=[self._server_error(), self._server_error(), self._server_error()])
+        provider = GenAISDKProvider(_client=fake)
+        with mock.patch("billwatch.genai_sdk_provider.time.sleep"):
+            with self.assertRaises(LLMProviderError):
+                provider.complete_json("sys", "user")
+        self.assertEqual(fake.models.call_count, 3)
+
+    def test_non_503_client_error_is_not_retried(self):
+        exc = genai_errors.ClientError(code=401, response_json={"error": {"code": 401, "status": "UNAUTHENTICATED", "message": "bad key"}})
+        fake = _SequenceFakeClient(results=[exc])
+        provider = GenAISDKProvider(_client=fake)
+        with mock.patch("billwatch.genai_sdk_provider.time.sleep") as mock_sleep:
+            with self.assertRaises(LLMProviderError):
+                provider.complete_json("sys", "user")
+        self.assertEqual(fake.models.call_count, 1)
+        mock_sleep.assert_not_called()
+
+    def test_server_error_with_non_503_status_is_not_retried(self):
+        exc = self._server_error(code=500, status="INTERNAL")
+        fake = _SequenceFakeClient(results=[exc])
+        provider = GenAISDKProvider(_client=fake)
+        with mock.patch("billwatch.genai_sdk_provider.time.sleep") as mock_sleep:
+            with self.assertRaises(LLMProviderError):
+                provider.complete_json("sys", "user")
+        self.assertEqual(fake.models.call_count, 1)
+        mock_sleep.assert_not_called()
+
+    def test_httpx_transport_error_still_not_retried(self):
+        fake = _SequenceFakeClient(results=[httpx.ConnectError("no route to host")])
+        provider = GenAISDKProvider(_client=fake)
+        with mock.patch("billwatch.genai_sdk_provider.time.sleep") as mock_sleep:
+            with self.assertRaises(LLMProviderError):
+                provider.complete_json("sys", "user")
+        self.assertEqual(fake.models.call_count, 1)
+        mock_sleep.assert_not_called()
+
+    def test_unknown_api_response_error_still_not_retried(self):
+        fake = _SequenceFakeClient(results=[genai_errors.UnknownApiResponseError("bizarre shape")])
+        provider = GenAISDKProvider(_client=fake)
+        with mock.patch("billwatch.genai_sdk_provider.time.sleep") as mock_sleep:
+            with self.assertRaises(LLMProviderError):
+                provider.complete_json("sys", "user")
+        self.assertEqual(fake.models.call_count, 1)
+        mock_sleep.assert_not_called()
+
+    def test_client_closed_exactly_once_even_after_retries(self):
+        with mock.patch.dict("os.environ", {"GEMINI_API_KEY": "env-key"}, clear=True):
+            with mock.patch("billwatch.genai_sdk_provider.genai.Client") as mock_client_cls:
+                mock_instance = mock_client_cls.return_value
+                mock_instance.models.generate_content.side_effect = [
+                    self._server_error(), _FakeResponseWithText("ok"),
+                ]
+                provider = GenAISDKProvider()
+                with mock.patch("billwatch.genai_sdk_provider.time.sleep"):
+                    result = provider.complete_json("sys", "user")
+                self.assertEqual(result, "ok")
+                mock_instance.close.assert_called_once()
+
+    def test_injected_client_never_closed_across_retries_either(self):
+        fake = _SequenceFakeClient(results=[self._server_error(), _FakeResponseWithText("ok")])
+        provider = GenAISDKProvider(_client=fake)
+        with mock.patch("billwatch.genai_sdk_provider.time.sleep"):
+            provider.complete_json("sys", "user")
+        self.assertFalse(fake.closed)
 
 
 if __name__ == "__main__":

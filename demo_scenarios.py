@@ -132,7 +132,7 @@ def scenario_1_supported_discrepancy():
             "hypothesis_id": hyp_id, "proposed_source_types": ["CMS_NCCI"],
             "verification_rationale": "Check CMS NCCI PTP bundling status.",
         },
-        appeal_text="I am appealing the billing of codes 45378 and 45380 together, which CMS NCCI treats as a bundled column1/column2 pair. I request a review of this claim.",
+        appeal_text="This is a request for human review of the billing for this claim. Codes 45378 and 45380 were billed together on the same date of service, totaling $500.00. Please review this claim to ensure billing accuracy.",
     )
 
 

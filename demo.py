@@ -58,10 +58,10 @@ def _mock_dispatch_provider(doc):
             fact_ids = re.findall(r"fact_id=([0-9a-fA-F-]+)", user_content)
             return json.dumps({
                 "draft_text": (
-                    "I am writing to appeal the billing of codes 45378 and 45380 "
-                    "together. Per CMS NCCI PTP edits, these codes are bundled under "
-                    "a column1/column2 relationship and should not have been billed "
-                    "separately. I request a review of this claim."
+                    "This is a request for human review of the billing for claim "
+                    + (claim_id or "") + ". Codes 45378 and 45380 were billed "
+                    "together on the same date of service, totaling $500.00. "
+                    "Please review this claim to ensure billing accuracy."
                 ),
                 "cited_fact_ids": fact_ids,
                 "cited_claim_ids": [claim_id] if claim_id else [],

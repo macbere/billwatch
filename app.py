@@ -48,7 +48,7 @@ def _mock_dispatch_provider(doc):
             m = re.search(r"claim_id:\s*(\S+)", user_content)
             fact_ids = re.findall(r"fact_id=([0-9a-fA-F-]+)", user_content)
             return json.dumps({
-                "draft_text": "I am appealing the billing of codes 45378 and 45380 together, which CMS NCCI treats as bundled.",
+                "draft_text": "This is a request for human review of the billing for claim " + (m.group(1) if m else "") + ". Codes 45378 and 45380 were billed together on the same date of service, totaling $500.00. Please review this claim to ensure billing accuracy.",
                 "cited_fact_ids": fact_ids,
                 "cited_claim_ids": [m.group(1)] if m else [],
             })

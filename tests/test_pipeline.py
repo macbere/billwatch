@@ -82,7 +82,10 @@ def _make_dispatch_provider(
         if "appeal-drafting component" in system_prompt:
             if appeal_response is not None:
                 return appeal_response
-            claim_match = re.search(r"claim_id:\s*(\S+)", user_content)
+            claim_match = re.search(
+                r"(?m)^claim_id:\s*([0-9a-fA-F-]+)\s*$",
+                user_content,
+            )
             claim_id = claim_match.group(1) if claim_match else ""
             fact_ids = re.findall(r"fact_id=([0-9a-fA-F-]+)", user_content)
             return json.dumps({

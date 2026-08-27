@@ -31,6 +31,7 @@ import private helpers from.
 
 from dataclasses import dataclass
 from typing import Optional
+import re
 
 from .enums import ValidationResult
 from .investigation import Investigation
@@ -75,53 +76,149 @@ def _find_supported_hypothesis(investigation: Investigation):
 
 
 _SYSTEM_PROMPT = (
-    "You are an appeal-drafting component for a medical bill investigation "
-    "that has ALREADY been deterministically adjudicated as containing a "
-    "supported billing discrepancy. You will be given one specific claim, "
-    "its explanation, and the exact facts that support it. Draft a clear, "
-    "professional appeal letter body citing ONLY the facts and claim given "
-    "to you.\n"
-    "\n"
-    "Respond with JSON matching exactly this shape:\n"
+    "You are an appeal-drafting component for a medical bill investigation. "
+    "The billing discrepancy has ALREADY been deterministically established "
+    "outside this component. Your ONLY task is to turn the supplied factual "
+    "record into a concise professional appeal letter body for human review.\\n"
+    "\\n"
+    "IMPORTANT: You are NOT being asked to explain why a code is bundled, "
+    "unbundled, included, excluded, medically necessary, or otherwise governed "
+    "by a coding rule. Do not provide coding guidance or interpret any coding "
+    "standard.\\n"
+    "\\n"
+    "You may state only observable facts explicitly supplied to you, such as "
+    "that particular codes appeared on a bill, that particular amounts were "
+    "billed, or that a particular date or claim identifier appears in the "
+    "record. You may request human review of those facts.\\n"
+    "\\n"
+    "Never invent, paraphrase, or reproduce AMA CPT procedure-code descriptor "
+    "text. Reference procedure codes only by their bare code numbers exactly "
+    "as supplied.\\n"
+    "\\n"
+    "Do not restate the deterministic adjudication, explain its reasoning, "
+    "state what any coding guideline means, or make a new determination.\\n"
+    "\\n"
+    "Respond with JSON matching exactly this shape:\\n"
     '{"draft_text": "<the appeal letter body text>", '
     '"cited_fact_ids": ["<only real fact_ids given to you>"], '
-    '"cited_claim_ids": ["<only the real claim_id given to you>"]}\n'
-    "\n"
-    "Rules:\n"
-    "- Only cite fact_ids and the claim_id actually given to you. Never "
-    "invent an identifier.\n"
-    "- Never invent, paraphrase, or reproduce any AMA CPT procedure code "
-    "descriptor text -- reference codes only by the bare code number as "
-    "given, never by an invented description of what a code means.\n"
-    "- The adjudication has already been made deterministically. Do NOT "
-    "restate, second-guess, or attach your own confidence about the "
-    "verdict. Do NOT include any field other than draft_text, "
-    "cited_fact_ids, and cited_claim_ids. In particular, never include "
-    "final_status, recommended_status, adjudication, authority_decision, "
-    "authority, authority_level, authority_result, appeal_eligible, "
-    "confidence, verdict, or case_scope -- including any such field will "
-    "cause your entire output to be discarded.\n"
-    "- This letter is a DRAFT for human review only. Do not claim it has "
-    "been or will be sent anywhere.\n"
-    "- Return ONLY the JSON object. No prose, no markdown fences."
+    '"cited_claim_ids": ["<only the real claim_id given to you>"]}\\n'
+    "\\n"
+    "Only cite identifiers actually supplied to you. Never invent an "
+    "identifier.\\n"
+    "\\n"
+    "This letter is a DRAFT for human review only. Do not claim that it has "
+    "been or will be sent anywhere.\\n"
+    "\\n"
+    "Return ONLY the JSON object. No prose and no markdown fences."
 )
 
 
 def _build_user_content(investigation: Investigation, hypothesis) -> str:
-    claim = next((c for c in investigation.ledger.claims if c.id == hypothesis.claim_id), None)
+    """
+    Build the narrowest possible LLM input.
+
+    SECURITY CONTRACT:
+    hypothesis.explanation_text is deterministic adjudication reasoning
+    and MUST NOT cross the LLM boundary.
+
+    Gemini receives only:
+      - claim_id
+      - the claim statement
+      - explicitly referenced factual ledger entries
+
+    Gemini does NOT receive the hypothesis explanation.
+    """
+    claim = next(
+        (c for c in investigation.ledger.claims if c.id == hypothesis.claim_id),
+        None,
+    )
+
     claim_text = claim.statement if claim else "(claim not found)"
+
     lines = [
         f"claim_id: {hypothesis.claim_id}",
         f"claim: {claim_text}",
-        f"hypothesis_explanation: {hypothesis.explanation_text}",
         "supporting facts:",
     ]
+
     facts_by_id = {f.id: f for f in investigation.ledger.facts}
+
     for fid in hypothesis.referenced_fact_ids:
         fact = facts_by_id.get(fid)
         if fact is not None:
-            lines.append(f"- fact_id={fact.id} | type={fact.fact_type} | value={fact.value!r}")
+            lines.append(
+                f"- fact_id={fact.id} | type={fact.fact_type} | value={fact.value!r}"
+            )
+
     return "\n".join(lines)
+
+
+# ---------------------------------------------------------------------
+# Deterministic appeal-prose firewall
+# ---------------------------------------------------------------------
+#
+# Gemini output is NEVER repaired.
+#
+# If the model attempts to introduce coding-rule explanation or
+# adjudicative reasoning into the appeal, the complete candidate is
+# rejected.
+# ---------------------------------------------------------------------
+
+_FORBIDDEN_APPEAL_PATTERNS = (
+    re.compile(r"\bstandard\s+(?:coding|billing)\s+guidelines?\b", re.I),
+    re.compile(r"\bcoding\s+guidelines?\b", re.I),
+    re.compile(r"\bbilling\s+guidelines?\b", re.I),
+    re.compile(r"\bnational\s+correct\s+coding\s+initiative\b", re.I),
+    re.compile(r"\bNCCI\b", re.I),
+    re.compile(r"\bbundled?\s+(?:into|with)\b", re.I),
+    re.compile(r"\bbundling\s+rules?\b", re.I),
+    re.compile(r"\bunbundl(?:ed|ing)\b", re.I),
+    re.compile(r"\bimproper\s+unbundling\b", re.I),
+    re.compile(r"\binappropriate\s+unbundling\b", re.I),
+    re.compile(r"\bcomponent\s+of\s+(?:the\s+)?more\s+comprehensive\b", re.I),
+    re.compile(r"\bincluded\s+within\b", re.I),
+    re.compile(r"\bintegral\s+component\b", re.I),
+    re.compile(
+        r"\b(?:code|procedure)\s+\d{5}\s+is\s+(?:bundled|included|integral)\b",
+        re.I,
+    ),
+    re.compile(
+        r"\b(?:code|procedure)\s+\d{5}\s+(?:must|should)\s+be\s+"
+        r"(?:bundled|reported|included)\b",
+        re.I,
+    ),
+    re.compile(r"\baccording\s+to\s+(?:standard\s+)?coding\b", re.I),
+    re.compile(r"\baccording\s+to\s+(?:standard\s+)?billing\b", re.I),
+    re.compile(
+        r"\b(?:CPT|HCPCS)\s+(?:guideline|rule|rules|descriptor|definition)\b",
+        re.I,
+    ),
+    re.compile(
+        r"\bthe\s+(?:CPT|HCPCS)\s+(?:guideline|rule|rules)\b",
+        re.I,
+    ),
+)
+
+
+def _validate_appeal_prose_firewall(draft_text: str) -> None:
+    """
+    Mechanically reject appeal prose that introduces coding-rule
+    explanation or adjudicative reasoning.
+
+    This is deterministic. Gemini output is never repaired.
+    """
+    if not isinstance(draft_text, str):
+        raise SchemaValidationError(
+            "Appeal draft_text must be a string."
+        )
+
+    for pattern in _FORBIDDEN_APPEAL_PATTERNS:
+        if pattern.search(draft_text):
+            raise SchemaValidationError(
+                "Appeal draft rejected by semantic safety firewall: "
+                "prohibited coding-rule/adjudication language detected."
+            )
+
 
 
 def generate_appeal_draft(investigation: Investigation, provider: LLMProvider) -> AppealDraftResult:
@@ -172,6 +269,9 @@ def generate_appeal_draft(investigation: Investigation, provider: LLMProvider) -
         candidate = parse_appeal_draft_candidate(
             raw_text, known_fact_ids=known_fact_ids, known_claim_ids=known_claim_ids
         )
+        # Defense in depth: schema-valid JSON is not sufficient.
+        # The prose itself must satisfy the appeal semantic contract.
+        _validate_appeal_prose_firewall(candidate.draft_text)
     except SchemaValidationError as exc:
         return AppealDraftResult(
             success=False, investigation_id=investigation.investigation_id,
