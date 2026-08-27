@@ -156,12 +156,12 @@ INDEX_HTML = """<!DOCTYPE html>
   .hero h1 em{color:var(--accent);font-style:normal;}
   .hero p{color:var(--muted);font-size:16px;max-width:480px;margin:0 auto 30px;line-height:1.65;}
   .cta-row{display:flex;gap:12px;justify-content:center;flex-wrap:wrap;}
-  button.primary{background:var(--accent);color:#fff;border:1px solid var(--accent);padding:13px 26px;border-radius:var(--radius-sm);
-    font-size:15px;font-weight:600;cursor:pointer;transition:background .15s,border-color .15s;min-height:48px;}
+  button.primary{background:var(--accent);color:#fff;border:1px solid var(--accent);padding:13px 22px;border-radius:var(--radius-sm);
+    font-size:14.5px;font-weight:600;cursor:pointer;transition:background .15s,border-color .15s;min-height:48px;}
   button.primary:hover{background:#4d7fe0;}
   button.primary:disabled{opacity:.55;cursor:default;}
-  button.ghost{background:transparent;color:var(--text);border:1px solid var(--border);padding:13px 26px;
-    border-radius:var(--radius-sm);font-size:15px;font-weight:600;cursor:pointer;min-height:48px;transition:border-color .15s;}
+  button.ghost{background:transparent;color:var(--text);border:1px solid var(--border);padding:13px 22px;
+    border-radius:var(--radius-sm);font-size:14.5px;font-weight:600;cursor:pointer;min-height:48px;transition:border-color .15s;}
   button.ghost:hover{border-color:var(--muted);}
   button.ghost:disabled{opacity:.55;cursor:default;}
   button:focus-visible{outline:2px solid var(--teal);outline-offset:2px;}
@@ -202,6 +202,15 @@ INDEX_HTML = """<!DOCTYPE html>
     margin-bottom:7px;font-weight:700;}
   .result-block code{background:rgba(255,255,255,.05);padding:2px 6px;border-radius:4px;word-break:break-word;
     font-size:13px;}
+  .report-card{background:var(--panel2);border:1px solid var(--good-border);border-radius:var(--radius-sm);
+    padding:20px;margin-top:8px;}
+  .report-title{font-size:15.5px;font-weight:700;color:var(--heading);margin-bottom:4px;}
+  .report-sub{font-size:13px;color:var(--good);font-weight:600;margin-bottom:14px;}
+  .report-row{display:flex;justify-content:space-between;gap:12px;padding:9px 0;border-top:1px solid var(--border);
+    font-size:14px;}
+  .report-row:first-of-type{border-top:none;}
+  .report-row .k{color:var(--muted);font-weight:600;flex-shrink:0;}
+  .report-row .v{color:var(--text);text-align:right;}
   .appeal-card{margin-top:8px;background:#f7f5f0;color:#1c1c1c;border-radius:var(--radius-sm);overflow:hidden;
     border:1px solid #d8d3c5;}
   .appeal-head{padding:14px 20px;border-bottom:1px solid #d8d3c5;background:#efece3;
@@ -215,7 +224,8 @@ INDEX_HTML = """<!DOCTYPE html>
   footer{padding:44px 0 56px;text-align:center;color:var(--muted);font-size:12.5px;border-top:1px solid var(--border-soft);
     margin-top:12px;}
   @media (max-width:480px){ .cta-row{flex-direction:column;} button.primary,button.ghost{width:100%;}
-    .card{padding:22px 18px;} .hero{padding:48px 0 28px;} }
+    .card{padding:22px 18px;} .hero{padding:48px 0 28px;} .report-row{flex-direction:column;gap:2px;}
+    .report-row .v{text-align:left;} }
 </style>
 </head>
 <body>
@@ -232,8 +242,8 @@ INDEX_HTML = """<!DOCTYPE html>
     <h1>Find <em>billing errors</em><br>before you pay.</h1>
     <p>BillWatch investigates your medical bill against real coding and billing rules -- and only drafts an appeal when the evidence genuinely supports one.</p>
     <div class="cta-row">
-      <button type="button" class="primary" id="runDemoBtn" aria-label="Run a live BillWatch investigation with a supported discrepancy">Run Live Investigation</button>
-      <button type="button" class="ghost" id="runCleanBtn" aria-label="Run a live BillWatch investigation with no supported discrepancy">Try Clean Bill Example</button>
+      <button type="button" class="primary" id="runDemoBtn" aria-label="Run a live BillWatch investigation using the discrepancy bill mock">Run Live Investigation (Discrepancy Bill Mock)</button>
+      <button type="button" class="ghost" id="runCleanBtn" aria-label="Run a live BillWatch investigation using the clean bill mock">Run Live Investigation (Clean Bill Mock)</button>
     </div>
     <div class="cta-row" style="margin-top:10px;">
       <button type="button" class="ghost" id="howBtn" aria-label="Jump to how BillWatch works">How BillWatch Works</button>
@@ -256,13 +266,13 @@ INDEX_HTML = """<!DOCTYPE html>
   <section id="investigation" class="card">
     <div class="kicker">Live Demo</div>
     <h2>Live investigation</h2>
-    <p class="muted">Both buttons run the real BillWatch pipeline against a real bill -- the same backend deployed to production. "Run Live Investigation" uses a bill with an established case scope and a real NCCI bundling issue. "Try Clean Bill Example" uses a bill where scope was never established, so BillWatch will not manufacture a discrepancy just because a rule happens to match.</p>
+    <p class="muted">Both buttons run the real BillWatch pipeline against a real bill -- the same backend deployed to production. The discrepancy mock uses a bill with an established case scope and a real NCCI bundling issue. The clean mock uses a bill where scope was never established, so BillWatch will not manufacture a discrepancy just because a rule happens to match.</p>
     <ul id="stages" aria-live="polite">
-      <li data-stage="0"><span class="num">1</span> Bill received</li>
-      <li data-stage="1"><span class="num">2</span> Scope checked</li>
-      <li data-stage="2"><span class="num">3</span> Evidence analyzed</li>
-      <li data-stage="3"><span class="num">4</span> Discrepancy verified</li>
-      <li data-stage="4"><span class="num">5</span> Appeal prepared</li>
+      <li data-stage="0"><span class="num">1</span><span class="stage-label">Bill Received</span></li>
+      <li data-stage="1"><span class="num">2</span><span class="stage-label">Scope Checked</span></li>
+      <li data-stage="2"><span class="num">3</span><span class="stage-label">Evidence Analysed</span></li>
+      <li data-stage="3"><span class="num">4</span><span class="stage-label">Discrepancy Verified</span></li>
+      <li data-stage="4"><span class="num">5</span><span class="stage-label">Appeal Prepared</span></li>
     </ul>
 
     <div id="result" aria-live="polite"></div>
@@ -277,12 +287,23 @@ INDEX_HTML = """<!DOCTYPE html>
 (function(){
   "use strict";
 
+  var DISCREPANCY_STEPS = ["Bill Received", "Scope Checked", "Evidence Analysed", "Discrepancy Verified", "Appeal Prepared"];
+  var CLEAN_STEPS = ["Bill Received", "Scope Checked", "Evidence Analysed", "Clean Bill Verified", "Detailed Report"];
+
   function prefersReducedMotion(){
     return !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
   }
 
   function escapeHtml(s){
     return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+  }
+
+  function applyStageLabels(scenario){
+    var labels = (scenario === "clean") ? CLEAN_STEPS : DISCREPANCY_STEPS;
+    var stageEls = document.querySelectorAll("#stages li .stage-label");
+    stageEls.forEach(function(el, i){
+      if (labels[i]) el.textContent = labels[i];
+    });
   }
 
   async function runDemo(scenario){
@@ -292,6 +313,8 @@ INDEX_HTML = """<!DOCTYPE html>
     var stages = document.querySelectorAll("#stages li");
     var resultEl = document.getElementById("result");
     if (!runBtn || !cleanBtn || runBtn.disabled || cleanBtn.disabled) return;
+
+    applyStageLabels(scenario);
 
     runBtn.disabled = true;
     cleanBtn.disabled = true;
@@ -359,12 +382,19 @@ INDEX_HTML = """<!DOCTYPE html>
       html += '</div>';
       resultEl.innerHTML = html;
     } else if (data.success) {
-      var html3 = '<div class="badge neutral">Investigation complete &mdash; no supported discrepancy</div>';
-      html3 += '<div class="result-grid">';
-      html3 += '<div class="result-block"><div class="label">Decision</div>BillWatch completed the full Scope &rarr; Evidence &rarr; Verification pipeline';
-      if (data.final_status) { html3 += ' and reached <code>' + escapeHtml(data.final_status) + '</code>'; }
-      html3 += '. The evidence did not establish a supported billing discrepancy, so no appeal was generated -- BillWatch only drafts an appeal when the evidence genuinely supports one.</div>';
+      var html3 = '<div class="badge good">&#10003; Investigation Complete</div> <span class="badge neutral">Clean Bill Verified</span>';
+      html3 += '<div class="report-card">';
+      html3 += '<div class="report-title">Detailed Report</div>';
+      html3 += '<div class="report-sub">No Appeal Recommended</div>';
+      html3 += '<div class="report-row"><span class="k">Status</span><span class="v">Clean Bill Verified</span></div>';
+      html3 += '<div class="report-row"><span class="k">Finding</span><span class="v">No supported billing discrepancy established.</span></div>';
+      html3 += '<div class="report-row"><span class="k">Appeal</span><span class="v">Not recommended.</span></div>';
+      html3 += '<div class="report-row"><span class="k">Reason</span><span class="v">The evidence and deterministic verification gates did not establish a supported discrepancy.</span></div>';
+      if (data.final_status) {
+        html3 += '<div class="report-row"><span class="k">Backend status</span><span class="v"><code>' + escapeHtml(data.final_status) + '</code></span></div>';
+      }
       html3 += '</div>';
+      html3 += '<p class="muted" style="margin-top:12px;">BillWatch completed its Scope &rarr; Evidence &rarr; Verification process. This means no supported billing discrepancy was established by the current evidence and verification process -- not that the bill is guaranteed error-free.</p>';
       resultEl.innerHTML = html3;
     } else {
       var html2 = '<div class="badge bad">Investigation incomplete</div>';
