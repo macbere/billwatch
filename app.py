@@ -3,13 +3,16 @@ BillWatch Cloud Run entrypoint. Stdlib-only HTTP wrapper -- no new
 dependency, no reasoning of its own. Calls the existing, unmodified
 pipeline.run_investigation() and serializes its result. Uses
 GenAISDKProvider if GEMINI_API_KEY is set, otherwise MockLLMProvider,
-exactly like demo.py.
+exactly like demo.py. Supports an optional ?scenario= query parameter
+on /investigate ("discrepancy" [default, unchanged existing behavior]
+or "clean") reusing the exact fixtures already proven in
+demo_scenarios.py -- no new adjudication logic, no new FinalStatus.
 """
 import json
 import os
 import re
 from http.server import BaseHTTPRequestHandler, HTTPServer
-from urllib.parse import urlsplit
+from urllib.parse import urlsplit, parse_qs
 
 from billwatch import Document, Investigation
 from billwatch.case_scope import establish_from_user_selection
@@ -53,11 +56,31 @@ def _mock_dispatch_provider(doc):
     return MockLLMProvider(response_fn=dispatch)
 
 
-def _run_demo_investigation():
-    doc = Document(
-        doc_type="bill",
-        raw_text="Itemized bill: CPT/HCPCS codes 45378 and 45380 billed together, same date of service, $500.00 total.",
-    )
+def _build_document_and_scope(scenario):
+    """Reuses the exact fixtures already proven in demo_scenarios.py.
+    'discrepancy' is byte-identical to the pre-existing app.py demo bill
+    (unchanged default). 'clean' reuses demo_scenarios.py's Scenario 2
+    fixture verbatim: a real NCCI-matching bill where case scope was
+    never established, so the deterministic Scope gate withholds
+    SUPPORTED_DISCREPANCY -- no new status, no new adjudication logic."""
+    if scenario == "clean":
+        doc = Document(
+            doc_type="bill",
+            raw_text="Itemized bill: CPT/HCPCS codes 45378 and 45380 billed together. Governing plan/payer type not yet confirmed.",
+        )
+        case_scope = None
+    else:
+        doc = Document(
+            doc_type="bill",
+            raw_text="Itemized bill: CPT/HCPCS codes 45378 and 45380 billed together, same date of service, $500.00 total.",
+        )
+        case_scope = establish_from_user_selection("medicare")
+    return doc, case_scope
+
+
+def _run_demo_investigation(scenario="discrepancy"):
+    doc, case_scope = _build_document_and_scope(scenario)
+
     if os.environ.get("GEMINI_API_KEY"):
         from billwatch.genai_sdk_provider import GenAISDKProvider
         provider = GenAISDKProvider()
@@ -65,7 +88,6 @@ def _run_demo_investigation():
         provider = _mock_dispatch_provider(doc)
 
     investigation = Investigation()
-    case_scope = establish_from_user_selection("medicare")
     store = ReferenceStore()
     load_bootstrap_data(store)
 
@@ -86,6 +108,16 @@ def route_path(raw_path):
     query string or fragment. '/?utm_source=x' and '/' both route to '/'.
     """
     return urlsplit(raw_path).path
+
+
+def _scenario_param(raw_path):
+    """Extract ?scenario= from the request target. Defaults to
+    'discrepancy' (the original, unchanged behavior) for any value other
+    than the two explicitly supported demo scenarios."""
+    qs = urlsplit(raw_path).query
+    values = parse_qs(qs).get("scenario")
+    value = values[0] if values else "discrepancy"
+    return value if value in ("discrepancy", "clean") else "discrepancy"
 
 
 INDEX_HTML = """<!DOCTYPE html>
@@ -131,6 +163,7 @@ INDEX_HTML = """<!DOCTYPE html>
   button.ghost{background:transparent;color:var(--text);border:1px solid var(--border);padding:13px 26px;
     border-radius:var(--radius-sm);font-size:15px;font-weight:600;cursor:pointer;min-height:48px;transition:border-color .15s;}
   button.ghost:hover{border-color:var(--muted);}
+  button.ghost:disabled{opacity:.55;cursor:default;}
   button:focus-visible{outline:2px solid var(--teal);outline-offset:2px;}
   section{margin:32px 0;}
   section[id]{scroll-margin-top:76px;}
@@ -157,6 +190,7 @@ INDEX_HTML = """<!DOCTYPE html>
     letter-spacing:-.01em;}
   .badge.good{background:var(--good-bg);color:var(--good);border:1px solid var(--good-border);}
   .badge.bad{background:var(--bad-bg);color:var(--bad);border:1px solid var(--bad-border);}
+  .badge.neutral{background:rgba(139,149,168,.12);color:var(--muted);border:1px solid rgba(139,149,168,.35);}
   .badge.gemini{background:rgba(74,157,149,.10);color:var(--teal);border:1px solid rgba(74,157,149,.35);}
   .result-grid{display:flex;flex-direction:column;gap:12px;margin-top:18px;}
   .result-block{padding:15px 16px;background:var(--panel2);border-radius:var(--radius-sm);border:1px solid var(--border);
@@ -198,7 +232,10 @@ INDEX_HTML = """<!DOCTYPE html>
     <h1>Find <em>billing errors</em><br>before you pay.</h1>
     <p>BillWatch investigates your medical bill against real coding and billing rules -- and only drafts an appeal when the evidence genuinely supports one.</p>
     <div class="cta-row">
-      <button type="button" class="primary" id="runDemoBtn" aria-label="Run a live BillWatch investigation">Run Live Investigation</button>
+      <button type="button" class="primary" id="runDemoBtn" aria-label="Run a live BillWatch investigation with a supported discrepancy">Run Live Investigation</button>
+      <button type="button" class="ghost" id="runCleanBtn" aria-label="Run a live BillWatch investigation with no supported discrepancy">Try Clean Bill Example</button>
+    </div>
+    <div class="cta-row" style="margin-top:10px;">
       <button type="button" class="ghost" id="howBtn" aria-label="Jump to how BillWatch works">How BillWatch Works</button>
     </div>
   </section>
@@ -206,7 +243,7 @@ INDEX_HTML = """<!DOCTYPE html>
   <section id="how" class="card">
     <div class="kicker">Architecture</div>
     <h2>AI doesn't decide alone</h2>
-    <p class="muted">BillWatch never just asks an AI "is this bill wrong?" It moves through a controlled pipeline where every consequential decision -- is a source authoritative, is evidence sufficient, is an appeal eligible -- is made by deterministic code, not the model. An appeal is only drafted after the pipeline itself reaches a supported-discrepancy state.</p>
+    <p class="muted">BillWatch never just asks an AI "is this bill wrong?" It moves through a controlled pipeline where every consequential decision -- is a source authoritative, is evidence sufficient, is an appeal eligible -- is made by deterministic code, not the model. An appeal is only drafted after the pipeline itself reaches a supported-discrepancy state. When the evidence doesn't support a discrepancy, BillWatch says so instead of manufacturing one.</p>
     <div class="pipeline">
       <span class="step">Scope</span><span class="arrow">&rarr;</span>
       <span class="step">Evidence</span><span class="arrow">&rarr;</span>
@@ -219,7 +256,7 @@ INDEX_HTML = """<!DOCTYPE html>
   <section id="investigation" class="card">
     <div class="kicker">Live Demo</div>
     <h2>Live investigation</h2>
-    <p class="muted">This runs the real BillWatch pipeline against a demo bill (CPT codes 45378 + 45380 billed same date of service) -- the same backend deployed to production.</p>
+    <p class="muted">Both buttons run the real BillWatch pipeline against a real bill -- the same backend deployed to production. "Run Live Investigation" uses a bill with an established case scope and a real NCCI bundling issue. "Try Clean Bill Example" uses a bill where scope was never established, so BillWatch will not manufacture a discrepancy just because a rule happens to match.</p>
     <ul id="stages" aria-live="polite">
       <li data-stage="0"><span class="num">1</span> Bill received</li>
       <li data-stage="1"><span class="num">2</span> Scope checked</li>
@@ -248,13 +285,20 @@ INDEX_HTML = """<!DOCTYPE html>
     return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
   }
 
-  async function runDemo(){
-    var btn = document.getElementById("runDemoBtn");
+  async function runDemo(scenario){
+    scenario = (scenario === "clean") ? "clean" : "discrepancy";
+    var runBtn = document.getElementById("runDemoBtn");
+    var cleanBtn = document.getElementById("runCleanBtn");
     var stages = document.querySelectorAll("#stages li");
     var resultEl = document.getElementById("result");
-    if (!btn || btn.disabled) return;
-    btn.disabled = true;
-    btn.textContent = "Investigating...";
+    if (!runBtn || !cleanBtn || runBtn.disabled || cleanBtn.disabled) return;
+
+    runBtn.disabled = true;
+    cleanBtn.disabled = true;
+    var activeBtn = scenario === "clean" ? cleanBtn : runBtn;
+    var activeLabel = activeBtn.textContent;
+    activeBtn.textContent = "Investigating...";
+
     resultEl.style.display = "none";
     resultEl.innerHTML = "";
     stages.forEach(function(li){ li.classList.remove("active","done"); });
@@ -270,7 +314,7 @@ INDEX_HTML = """<!DOCTYPE html>
     }
 
     var data = null, errored = false;
-    var fetchPromise = fetch("/investigate").then(function(r){
+    var fetchPromise = fetch("/investigate?scenario=" + encodeURIComponent(scenario)).then(function(r){
       if (!r.ok) throw new Error("bad status");
       return r.json();
     }).then(function(j){ data = j; }).catch(function(){ errored = true; });
@@ -282,14 +326,15 @@ INDEX_HTML = """<!DOCTYPE html>
       stages[stages.length-1].classList.add("done");
     }
 
-    btn.disabled = false;
-    btn.textContent = "Run Live Investigation";
+    runBtn.disabled = false;
+    cleanBtn.disabled = false;
+    activeBtn.textContent = activeLabel;
     resultEl.style.display = "block";
 
     if (errored || !data){
       resultEl.innerHTML = '<div class="badge bad">Investigation temporarily unavailable</div>'
         + '<p class="muted" style="margin-top:10px;">We could not reach the investigation service just now.</p>'
-        + '<div class="actions"><button type="button" class="small" data-action="retry">Retry</button></div>';
+        + '<div class="actions"><button type="button" class="small" data-action="retry" data-scenario="' + scenario + '">Retry</button></div>';
       return;
     }
 
@@ -313,11 +358,19 @@ INDEX_HTML = """<!DOCTYPE html>
       }
       html += '</div>';
       resultEl.innerHTML = html;
+    } else if (data.success) {
+      var html3 = '<div class="badge neutral">Investigation complete &mdash; no supported discrepancy</div>';
+      html3 += '<div class="result-grid">';
+      html3 += '<div class="result-block"><div class="label">Decision</div>BillWatch completed the full Scope &rarr; Evidence &rarr; Verification pipeline';
+      if (data.final_status) { html3 += ' and reached <code>' + escapeHtml(data.final_status) + '</code>'; }
+      html3 += '. The evidence did not establish a supported billing discrepancy, so no appeal was generated -- BillWatch only drafts an appeal when the evidence genuinely supports one.</div>';
+      html3 += '</div>';
+      resultEl.innerHTML = html3;
     } else {
-      var html2 = '<div class="badge bad">No supported discrepancy</div>';
+      var html2 = '<div class="badge bad">Investigation incomplete</div>';
       html2 += '<p class="muted" style="margin-top:10px;">BillWatch did not generate an appeal because the evidence and state required to support one were not established';
       if (data.failed_stage){ html2 += " (stopped at: <code>" + escapeHtml(String(data.failed_stage)) + "</code>)"; }
-      html2 += ".</p>";
+      html2 += '.</p><div class="actions"><button type="button" class="small" data-action="retry" data-scenario="' + scenario + '">Retry</button></div>';
       resultEl.innerHTML = html2;
     }
   }
@@ -349,6 +402,7 @@ INDEX_HTML = """<!DOCTYPE html>
   document.addEventListener("DOMContentLoaded", function(){
     var brandBtn = document.getElementById("brandBtn");
     var runBtn = document.getElementById("runDemoBtn");
+    var cleanBtn = document.getElementById("runCleanBtn");
     var howBtn = document.getElementById("howBtn");
     var resultEl = document.getElementById("result");
 
@@ -366,7 +420,10 @@ INDEX_HTML = """<!DOCTYPE html>
       });
     }
     if (runBtn){
-      runBtn.addEventListener("click", runDemo);
+      runBtn.addEventListener("click", function(){ runDemo("discrepancy"); });
+    }
+    if (cleanBtn){
+      cleanBtn.addEventListener("click", function(){ runDemo("clean"); });
     }
     if (resultEl){
       resultEl.addEventListener("click", function(e){
@@ -375,7 +432,7 @@ INDEX_HTML = """<!DOCTYPE html>
         var action = actionEl.getAttribute("data-action");
         if (action === "copy") copyAppeal();
         if (action === "download") downloadAppeal();
-        if (action === "retry") runDemo();
+        if (action === "retry") runDemo(actionEl.getAttribute("data-scenario") || "discrepancy");
       });
     }
   });
@@ -410,7 +467,8 @@ class Handler(BaseHTTPRequestHandler):
             self._send_json(200, {"status": "ok", "service": "billwatch"})
         elif path == "/investigate":
             try:
-                self._send_json(200, _run_demo_investigation())
+                scenario = _scenario_param(self.path)
+                self._send_json(200, _run_demo_investigation(scenario))
             except Exception as exc:
                 self._send_json(500, {"error": str(exc)})
         else:
