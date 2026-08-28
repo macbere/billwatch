@@ -30,7 +30,7 @@ the documented real acquisition procedure to replace this file.
 
 from datetime import date
 
-from .reference_data import HCPCSRecord, ICD10Record, NCCIPairRecord
+from .reference_data import HCPCSRecord, ICD10Record, NCCIPairRecord, PlanPolicyRecord, PLAN_POLICY_LICENSE_BASIS
 
 
 _RETRIEVAL_DATE = date(2026, 8, 9)  # date this bootstrap file was authored
@@ -102,6 +102,33 @@ NCCI_PTP_BOOTSTRAP_RECORDS = [
 ]
 
 
+PLAN_POLICY_BOOTSTRAP_RECORDS = [
+    PlanPolicyRecord(
+        plan_id="DEMO-PLAN-001",
+        policy_id="DEMO-POL-001",
+        rule_type="coverage_rule",
+        rule_text=(
+            "[DEMO FIXTURE -- SYNTHETIC, AUTHOR-WRITTEN, NOT A REAL INSURER "
+            "POLICY, NOT SOURCED FROM ANY ACTUAL PLAN DOCUMENT] This "
+            "illustrative plan policy states that an annual wellness "
+            "examination (code Z00.00) is covered under this plan without "
+            "patient cost-sharing when billed as a standalone preventive "
+            "visit."
+        ),
+        applicable_codes=("Z00.00",),
+        patient_cost_share_cents=0,
+        source="BillWatch controlled demo fixture (author-written, not sourced from any real insurer)",
+        source_url="internal://billwatch/demo-fixtures/plan-policy",
+        effective_date=date(2026, 1, 1),
+        version="demo-v1",
+        retrieval_date=_RETRIEVAL_DATE,
+        license_basis=PLAN_POLICY_LICENSE_BASIS,
+    ),
+]
+
+
+
+
 def load_bootstrap_data(store) -> dict:
     """
     Loads the three bootstrap snapshots into the given ReferenceStore.
@@ -139,5 +166,15 @@ def load_bootstrap_data(store) -> dict:
         retrieval_date=_RETRIEVAL_DATE,
         version="2026-Q2-illustrative",
         license_basis="public_cms_ncci",
+    )
+    results["plan_policy"] = store.load_snapshot(
+        dataset_name="plan_policy",
+        records=PLAN_POLICY_BOOTSTRAP_RECORDS,
+        source="BillWatch controlled demo fixture (author-written, not sourced from any real insurer)",
+        source_url="internal://billwatch/demo-fixtures/plan-policy",
+        effective_date=date(2026, 1, 1),
+        retrieval_date=_RETRIEVAL_DATE,
+        version="demo-v1",
+        license_basis=PLAN_POLICY_LICENSE_BASIS,
     )
     return results

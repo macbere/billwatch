@@ -45,6 +45,10 @@ class ExtractedFact:
     value: str
     id: str = field(default_factory=_new_id)
     confidence: Optional[str] = None
+    # Exact document substring already validated by llm_schemas.py before
+    # integration. Optional for backward compatibility with facts created
+    # directly by deterministic/test code predating provenance retention.
+    source_span: Optional[str] = None
 
 
 @dataclass(frozen=True)

@@ -99,6 +99,7 @@ def integrate_extraction(
             fact_type=candidate.fact_type,
             value=candidate.value,
             confidence=candidate.confidence,
+            source_span=candidate.source_span,
         )
         investigation.ledger.add_fact(fact)
         added_ids.append(fact.id)

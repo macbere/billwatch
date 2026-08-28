@@ -29,6 +29,16 @@ import re
 import uuid
 
 from .authority import APPROVED_LICENSE_BASES
+
+# Phase C1: PLAN_POLICY reference data is a controlled, author-written demo
+# fixture -- explicitly NOT public CMS/NCHS data -- so it must never be
+# validated against APPROVED_LICENSE_BASES (which is specifically the
+# allowlist for reused public federal reference data). This constant is a
+# deliberately narrow, single-purpose allowlist used ONLY by
+# validate_plan_policy_record(), and does not modify authority.py's shared
+# APPROVED_LICENSE_BASES in any way.
+PLAN_POLICY_LICENSE_BASIS = "controlled_demo_fixture_synthetic"
+_PLAN_POLICY_APPROVED_LICENSE_BASES = frozenset({PLAN_POLICY_LICENSE_BASIS})
 from .enums import SourceType
 from .evidence import Source
 
@@ -118,6 +128,32 @@ class NCCIPairRecord:
 
 
 @dataclass(frozen=True)
+class PlanPolicyRecord:
+    """
+    Phase C1: a single plan-specific policy rule. Deliberately distinct
+    from HCPCSRecord/ICD10Record/NCCIPairRecord -- this represents a
+    SINGLE PLAN's own stated policy, not a public/universal code
+    reference. rule_text MUST carry an explicit "[DEMO FIXTURE" marker
+    (enforced by validate_plan_policy_record(), not just documented) so
+    it can never be mistaken for real, unmarked insurer policy text.
+    """
+    plan_id: str
+    policy_id: str
+    rule_type: str            # "coverage_rule" | "bundling_methodology_adoption" | "exclusion_rule"
+    rule_text: str             # short, synthetic, author-written; must contain the demo marker
+    applicable_codes: tuple    # code numbers this rule concerns; may be empty
+    patient_cost_share_cents: Optional[int]
+    source: str
+    source_url: str
+    effective_date: date
+    version: str
+    retrieval_date: date
+    license_basis: str
+    scope: str = "single_plan"
+    id: str = field(default_factory=_new_id)
+
+
+@dataclass(frozen=True)
 class ReferenceSnapshot:
     dataset_name: str            # "hcpcs" | "icd10cm" | "ncci_ptp"
     version: str
@@ -144,7 +180,16 @@ class LookupResult:
 # -- validation (fail-closed) --------------------------------------------
 
 def _validate_common_provenance(ref: str, source, source_url, effective_date,
-                                 version, retrieval_date, license_basis) -> list:
+                                 version, retrieval_date, license_basis,
+                                 allowed_license_bases=None) -> list:
+    """allowed_license_bases defaults to the shared public-data allowlist
+    (authority.APPROVED_LICENSE_BASES) for backward compatibility with the
+    three original datasets (hcpcs/icd10cm/ncci_ptp). PLAN_POLICY (added in
+    Phase C1) is NOT public CMS/NCHS data and passes its own, distinct,
+    much narrower allowlist so it can never be validated as if it were
+    officially-licensed public reference data."""
+    if allowed_license_bases is None:
+        allowed_license_bases = APPROVED_LICENSE_BASES
     issues = []
     if not source or not str(source).strip():
         issues.append(f"{ref}: missing source")
@@ -156,10 +201,10 @@ def _validate_common_provenance(ref: str, source, source_url, effective_date,
         issues.append(f"{ref}: missing version")
     if not isinstance(retrieval_date, date):
         issues.append(f"{ref}: missing/invalid retrieval_date")
-    if license_basis not in APPROVED_LICENSE_BASES:
+    if license_basis not in allowed_license_bases:
         issues.append(
             f"{ref}: unapproved or missing license_basis={license_basis!r} "
-            f"(must be one of {sorted(APPROVED_LICENSE_BASES)})"
+            f"(must be one of {sorted(allowed_license_bases)})"
         )
     return issues
 
@@ -209,10 +254,72 @@ def validate_ncci_pair_record(rec: NCCIPairRecord) -> list:
     return issues
 
 
+_PLAN_ID_RE = re.compile(r"^[A-Z0-9][A-Z0-9\-]{2,31}$")
+_POLICY_ID_RE = re.compile(r"^[A-Z0-9][A-Z0-9\-]{2,31}$")
+_VALID_PLAN_POLICY_RULE_TYPES = frozenset({
+    "coverage_rule", "bundling_methodology_adoption", "exclusion_rule",
+})
+_PLAN_POLICY_DEMO_MARKER = "[DEMO FIXTURE"
+
+
+def validate_plan_policy_record(rec: "PlanPolicyRecord") -> list:
+    ref = f"PLAN_POLICY:{rec.plan_id}:{rec.policy_id}"
+    issues = _validate_common_provenance(
+        ref, rec.source, rec.source_url, rec.effective_date, rec.version,
+        rec.retrieval_date, rec.license_basis,
+        allowed_license_bases=_PLAN_POLICY_APPROVED_LICENSE_BASES,
+    )
+    if not _PLAN_ID_RE.match(rec.plan_id or ""):
+        issues.append(f"{ref}: malformed plan_id")
+    if not _POLICY_ID_RE.match(rec.policy_id or ""):
+        issues.append(f"{ref}: malformed policy_id")
+    if rec.rule_type not in _VALID_PLAN_POLICY_RULE_TYPES:
+        issues.append(
+            f"{ref}: unrecognized rule_type {rec.rule_type!r}; must be one "
+            f"of {sorted(_VALID_PLAN_POLICY_RULE_TYPES)}"
+        )
+    if not rec.rule_text or not rec.rule_text.strip():
+        issues.append(f"{ref}: rule_text must be a non-empty string")
+    elif _PLAN_POLICY_DEMO_MARKER not in rec.rule_text:
+        issues.append(
+            f"{ref}: rule_text must carry the explicit demo-fixture marker "
+            f"{_PLAN_POLICY_DEMO_MARKER!r} -- synthetic policy fixtures "
+            "must never be presented as unmarked, potentially-real "
+            "insurer policy text"
+        )
+    if not isinstance(rec.applicable_codes, tuple) or not all(
+        isinstance(c, str) for c in rec.applicable_codes
+    ):
+        issues.append(f"{ref}: applicable_codes must be a tuple of strings")
+    if rec.patient_cost_share_cents is not None:
+        if (
+            isinstance(rec.patient_cost_share_cents, bool)
+            or not isinstance(rec.patient_cost_share_cents, int)
+            or rec.patient_cost_share_cents < 0
+        ):
+            issues.append(
+                f"{ref}: patient_cost_share_cents must be None or a "
+                "non-negative integer number of cents"
+            )
+    return issues
+
+
 _VALIDATORS = {
     "hcpcs": validate_hcpcs_record,
     "icd10cm": validate_icd10_record,
     "ncci_ptp": validate_ncci_pair_record,
+    "plan_policy": validate_plan_policy_record,
+}
+
+# Snapshot-level provenance is dataset-specific. The original public
+# reference datasets continue to use exactly APPROVED_LICENSE_BASES.
+# PLAN_POLICY demo fixtures are deliberately isolated from that federal
+# public-data allowlist.
+_DATASET_APPROVED_LICENSE_BASES = {
+    "hcpcs": APPROVED_LICENSE_BASES,
+    "icd10cm": APPROVED_LICENSE_BASES,
+    "ncci_ptp": APPROVED_LICENSE_BASES,
+    "plan_policy": _PLAN_POLICY_APPROVED_LICENSE_BASES,
 }
 
 
@@ -254,6 +361,7 @@ class ReferenceStore:
         snapshot_level_issues = _validate_common_provenance(
             f"snapshot:{dataset_name}:{version}", source, source_url,
             effective_date, version, retrieval_date, license_basis,
+            allowed_license_bases=_DATASET_APPROVED_LICENSE_BASES[dataset_name],
         )
         if snapshot_level_issues:
             raise ReferenceDataError(
@@ -274,9 +382,21 @@ class ReferenceStore:
         seen_keys = set()
         for rec in records:
             issues = validator(rec)
-            key = (
-                rec.code if hasattr(rec, "code") else (rec.code_a, rec.code_b)
-            )
+
+            # Duplicate identity is dataset-specific and fail-closed.
+            # Preserve the original keys for all pre-C1 datasets.
+            if dataset_name in {"hcpcs", "icd10cm"}:
+                key = rec.code
+            elif dataset_name == "ncci_ptp":
+                key = (rec.code_a, rec.code_b)
+            elif dataset_name == "plan_policy":
+                key = (rec.plan_id, rec.policy_id)
+            else:
+                # Defensive branch: dataset_name has already been validated
+                # above, so reaching this point indicates an internal bug.
+                raise ReferenceDataError(
+                    f"No duplicate-key policy exists for dataset {dataset_name!r}"
+                )
             if key in seen_keys:
                 issues = issues + [f"duplicate record for key={key!r} within this snapshot"]
             if issues:
@@ -367,6 +487,9 @@ class ReferenceStore:
 
         return self._lookup("ncci_ptp", matcher, label, as_of)
 
+    def lookup_plan_policy(self, plan_id: str, as_of: Optional[date] = None) -> LookupResult:
+        return self._lookup("plan_policy", lambda r: r.plan_id == plan_id, plan_id, as_of)
+
     # -- the CPT boundary, enforced structurally -----------------------------
     def lookup_cpt_descriptor(self, code: str) -> LookupResult:
         """
@@ -404,6 +527,14 @@ class ReferenceStore:
         if lookup_result.status != LookupStatus.FOUND:
             return None
         rec = lookup_result.record
+        if isinstance(rec, PlanPolicyRecord):
+            return Source(
+                source_type=SourceType.PLAN_POLICY,
+                reference=f"{rec.policy_id} ({rec.rule_type}): {rec.rule_text}",
+                scope=rec.scope,
+                license_usage_basis=rec.license_basis,
+                retrieved_at=datetime.combine(rec.retrieval_date, datetime.min.time(), tzinfo=timezone.utc),
+            )
         if isinstance(rec, NCCIPairRecord):
             return Source(
                 source_type=SourceType.CMS_NCCI,

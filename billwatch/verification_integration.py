@@ -32,7 +32,10 @@ DESIGN DECISIONS (documented, not hidden):
 """
 
 from dataclasses import dataclass
+from decimal import Decimal, InvalidOperation
+from datetime import date
 from typing import Optional
+import re
 
 from .authority import ClaimType, AuthorityResult, evaluate_source_authority, flag_potential_conflict
 from .case_scope import resolve_case_scope
@@ -65,10 +68,6 @@ class VerificationIntegrationResult:
 # this bounded stage. Never fabricated -- always routed to MissingEvidence
 # with an honest, specific reason.
 _NO_LOOKUP_SOURCE_TYPES = {
-    SourceType.PLAN_POLICY: (
-        "requires the patient's actual plan/policy document -- not "
-        "available via automated reference-data lookup in this bounded stage"
-    ),
     SourceType.EOB: (
         "requires the patient's actual EOB document -- not available via "
         "automated reference-data lookup in this bounded stage"
@@ -109,40 +108,310 @@ def _code_values_for_hypothesis(investigation: Investigation, hypothesis) -> lis
     ]
 
 
+_PATIENT_RESPONSIBILITY_MARKERS = (
+    "patient responsibility",
+    "patient owes",
+    "patient due",
+    "amount due from patient",
+)
+
+_CURRENCY_VALUE_RE = re.compile(r"^\$?([0-9]+(?:\.[0-9]{1,2})?)$")
+
+
+def _amount_value_to_cents(value):
+    """Parse one extracted amount value into integer cents.
+
+    No semantic meaning is inferred here. This function only performs a
+    strict numeric conversion.
+    """
+    raw = str(value).strip().replace(",", "")
+    match = _CURRENCY_VALUE_RE.fullmatch(raw)
+    if not match:
+        return None
+
+    try:
+        amount = Decimal(match.group(1))
+    except InvalidOperation:
+        return None
+
+    if amount < 0:
+        return None
+
+    cents = amount * 100
+    if cents != cents.to_integral_value():
+        return None
+
+    return int(cents)
+
+
+def _patient_responsibility_cents_for_hypothesis(
+    investigation: Investigation,
+    hypothesis,
+) -> list:
+    """Return only explicitly-labelled patient-responsibility amounts.
+
+    Fail closed:
+    - generic totals are ignored;
+    - provider charges are ignored;
+    - unlabeled amounts are ignored;
+    - malformed values are ignored;
+    - only referenced facts are eligible.
+    """
+    facts_by_id = {f.id: f for f in investigation.ledger.facts}
+    values = []
+
+    for fid in hypothesis.referenced_fact_ids:
+        fact = facts_by_id.get(fid)
+
+        if fact is None or fact.fact_type != "amount":
+            continue
+
+        span = (fact.source_span or "").lower()
+
+        if not any(
+            marker in span
+            for marker in _PATIENT_RESPONSIBILITY_MARKERS
+        ):
+            continue
+
+        cents = _amount_value_to_cents(fact.value)
+
+        if cents is not None:
+            values.append(cents)
+
+    return values
+
+
+def _service_dates_for_hypothesis(
+    investigation: Investigation,
+    hypothesis,
+) -> list:
+    """Return strictly parsed ISO dates from referenced date facts only.
+
+    PLAN_POLICY temporal applicability must be based on document facts
+    already admitted to the evidence ledger. No LLM interpretation,
+    current-date substitution, or fuzzy date parsing is permitted here.
+    """
+    facts_by_id = {f.id: f for f in investigation.ledger.facts}
+    values = []
+
+    for fid in hypothesis.referenced_fact_ids:
+        fact = facts_by_id.get(fid)
+
+        if fact is None or fact.fact_type != "date":
+            continue
+
+        try:
+            parsed = date.fromisoformat(str(fact.value).strip())
+        except (TypeError, ValueError):
+            continue
+
+        values.append(parsed)
+
+    return values
+
+
+def _plan_id_values_for_hypothesis(investigation: Investigation, hypothesis, reference_store: ReferenceStore) -> list:
+    """Phase C1: deterministic plan-identifier matching. A 'clause' fact
+    (an existing, unmodified fact_type -- no schema change) is treated as
+    a candidate plan_id ONLY if it exactly matches a plan_id already
+    present in the loaded plan_policy reference snapshot. This is a pure
+    string-equality check against known, real, already-validated data --
+    never a fuzzy match, never an LLM judgment of applicability."""
+    facts_by_id = {f.id: f for f in investigation.ledger.facts}
+    clause_values = [
+        facts_by_id[fid].value
+        for fid in hypothesis.referenced_fact_ids
+        if fid in facts_by_id and facts_by_id[fid].fact_type == "clause"
+    ]
+    snapshot = reference_store.get_current_snapshot("plan_policy")
+    known_plan_ids = {rec.plan_id for rec in snapshot.records} if snapshot else set()
+    return [v for v in clause_values if v in known_plan_ids]
+
+
 def _resolve_case_scope(investigation: Investigation):
     if investigation.case_scope is not None:
         return investigation.case_scope
     return resolve_case_scope(source_identifier="verification-no-scope-set")
 
 
-def _attempt_lookup(source_type, code_values, case_scope, reference_store: ReferenceStore):
-    """Returns (AuthorityDecision or None, missing-evidence-reason or None)."""
+def _attempt_lookup(
+    source_type,
+    code_values,
+    plan_id_values,
+    patient_responsibility_cents,
+    service_dates,
+    case_scope,
+    reference_store: ReferenceStore,
+):
+    """Returns (decision, missing_reason, corroboration_override).
+
+    corroboration_override is normally None so all pre-C1 pathways retain
+    their original behavior.
+
+    PLAN_POLICY uses the override to distinguish:
+      - authoritative policy + proven bill contradiction -> corroborated
+      - authoritative policy + checked clean bill -> silent
+
+    Authority is not the same thing as discrepancy proof.
+    """
     if source_type in _NO_LOOKUP_SOURCE_TYPES:
-        return None, _NO_LOOKUP_SOURCE_TYPES[source_type]
+        return None, _NO_LOOKUP_SOURCE_TYPES[source_type], None
+
+    if source_type == SourceType.PLAN_POLICY:
+        if not plan_id_values:
+            return None, (
+                "PLAN_POLICY verification requires a plan identifier "
+                "extracted as a 'clause' fact matching a known plan_id in "
+                "the loaded plan_policy reference snapshot; none was found "
+                "among the referenced facts"
+            ), None
+
+        unique_plan_ids = tuple(dict.fromkeys(plan_id_values))
+
+        if len(unique_plan_ids) != 1:
+            return None, (
+                "PLAN_POLICY verification found multiple distinct plan "
+                "identifiers among the referenced facts; BillWatch will "
+                "not guess which plan governs the claim"
+            ), None
+
+        plan_id = unique_plan_ids[0]
+
+        unique_service_dates = tuple(dict.fromkeys(service_dates))
+
+        if len(unique_service_dates) != 1:
+            return None, (
+                "PLAN_POLICY verification requires exactly one valid ISO "
+                "service-date fact among the referenced facts; "
+                f"{len(unique_service_dates)} distinct usable dates were found"
+            ), None
+
+        service_date = unique_service_dates[0]
+
+        lookup = reference_store.lookup_plan_policy(
+            plan_id,
+            as_of=service_date,
+        )
+
+        if lookup.status == LookupStatus.OUTSIDE_EFFECTIVE_PERIOD:
+            return None, (
+                f"PLAN_POLICY record for plan_id {plan_id!r} was not yet "
+                f"effective on service date {service_date.isoformat()}"
+            ), None
+
+        if lookup.status != LookupStatus.FOUND:
+            return None, (
+                f"No applicable plan-policy record found for plan_id "
+                f"{plan_id!r} on service date {service_date.isoformat()}"
+            ), None
+
+        rec = lookup.record
+
+        if rec.rule_type != "coverage_rule":
+            return None, (
+                f"PLAN_POLICY record {rec.policy_id!r} has rule_type "
+                f"{rec.rule_type!r}, which this bounded comparator does "
+                "not support"
+            ), None
+
+        applicable_codes = set(rec.applicable_codes)
+        referenced_codes = set(code_values)
+
+        if not applicable_codes.intersection(referenced_codes):
+            return None, (
+                f"PLAN_POLICY record {rec.policy_id!r} does not apply to "
+                f"any referenced code {sorted(referenced_codes)!r}"
+            ), None
+
+        if rec.patient_cost_share_cents is None:
+            return None, (
+                f"PLAN_POLICY record {rec.policy_id!r} has no structured "
+                "patient cost-sharing value for deterministic comparison"
+            ), None
+
+        if len(patient_responsibility_cents) != 1:
+            return None, (
+                "PLAN_POLICY cost-sharing verification requires exactly "
+                "one explicitly-labelled patient-responsibility amount; "
+                f"{len(patient_responsibility_cents)} usable values were found"
+            ), None
+
+        actual_cents = patient_responsibility_cents[0]
+        allowed_cents = rec.patient_cost_share_cents
+
+        source = reference_store.to_source(lookup)
+
+        decision = evaluate_source_authority(
+            source,
+            case_scope,
+            ClaimType.GENERIC,
+        )
+
+        if actual_cents > allowed_cents:
+            return decision, None, "corroborated"
+
+        return decision, None, "silent"
 
     if source_type == SourceType.CMS_NCCI:
         if len(code_values) < 2:
             return None, (
                 "CMS_NCCI verification requires two referenced code facts; "
                 f"only {len(code_values)} were available"
-            )
-        lookup = reference_store.lookup_ncci_pair(code_values[0], code_values[1])
+            ), None
+
+        lookup = reference_store.lookup_ncci_pair(
+            code_values[0],
+            code_values[1],
+        )
+
         if lookup.status != LookupStatus.FOUND:
-            return None, f"No NCCI pair record found for codes {code_values[0]!r}/{code_values[1]!r}"
+            return None, (
+                f"No NCCI pair record found for codes "
+                f"{code_values[0]!r}/{code_values[1]!r}"
+            ), None
+
         source = reference_store.to_source(lookup)
-        return evaluate_source_authority(source, case_scope, ClaimType.CODING_BUNDLING), None
+
+        return (
+            evaluate_source_authority(
+                source,
+                case_scope,
+                ClaimType.CODING_BUNDLING,
+            ),
+            None,
+            None,
+        )
 
     if source_type == SourceType.CODE_DEFINITION:
         for code in code_values:
             lookup = reference_store.lookup_hcpcs(code)
+
             if lookup.status != LookupStatus.FOUND:
                 lookup = reference_store.lookup_icd10(code)
+
             if lookup.status == LookupStatus.FOUND:
                 source = reference_store.to_source(lookup)
-                return evaluate_source_authority(source, case_scope, ClaimType.DEFINITIONAL), None
-        return None, f"No HCPCS/ICD-10 record found for any referenced code {code_values!r}"
 
-    return None, f"No deterministic lookup mechanism exists for source type {source_type.value!r} in this bounded stage"
+                return (
+                    evaluate_source_authority(
+                        source,
+                        case_scope,
+                        ClaimType.DEFINITIONAL,
+                    ),
+                    None,
+                    None,
+                )
+
+        return None, (
+            f"No HCPCS/ICD-10 record found for any referenced code "
+            f"{code_values!r}"
+        ), None
+
+    return None, (
+        f"No deterministic lookup mechanism exists for source type "
+        f"{source_type.value!r} in this bounded stage"
+    ), None
 
 
 _SYSTEM_PROMPT = (
@@ -241,18 +510,51 @@ def verify_hypothesis(
 
     case_scope = _resolve_case_scope(investigation)
     code_values = _code_values_for_hypothesis(investigation, hypothesis)
+    plan_id_values = _plan_id_values_for_hypothesis(
+        investigation,
+        hypothesis,
+        reference_store,
+    )
+    patient_responsibility_cents = (
+        _patient_responsibility_cents_for_hypothesis(
+            investigation,
+            hypothesis,
+        )
+    )
+    service_dates = _service_dates_for_hypothesis(
+        investigation,
+        hypothesis,
+    )
 
     decisions = []
     verification_ids = []
     missing_evidence_ids = []
 
     for source_type in candidate.proposed_source_types:
-        decision, missing_reason = _attempt_lookup(source_type, code_values, case_scope, reference_store)
+        (
+            decision,
+            missing_reason,
+            corroboration_override,
+        ) = _attempt_lookup(
+            source_type,
+            code_values,
+            plan_id_values,
+            patient_responsibility_cents,
+            service_dates,
+            case_scope,
+            reference_store,
+        )
+
         if decision is not None:
             decisions.append(decision)
+
             verification = Verification(
                 hypothesis_id=hypothesis.id,
-                corroboration_result=_corroboration_result_for(decision),
+                corroboration_result=(
+                    corroboration_override
+                    if corroboration_override is not None
+                    else _corroboration_result_for(decision)
+                ),
                 citation_ref=decision.source_id,
                 authority_result=decision.result.value,
             )
