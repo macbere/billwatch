@@ -31,6 +31,7 @@ import private helpers from.
 
 from dataclasses import dataclass
 from typing import Optional
+import json
 import re
 
 from .enums import ValidationResult
@@ -221,6 +222,48 @@ def _validate_appeal_prose_firewall(draft_text: str) -> None:
 
 
 
+def _extract_first_json_object(raw_text: str) -> str:
+    """Defensive cleanup for a confirmed, empirically-observed Gemini
+    output artifact: the model occasionally emits one well-formed JSON
+    object followed by trailing whitespace/newline (or other incidental
+    trailing content) after the closing brace, which strict json.loads()
+    parsing rejects as 'Extra data'. This performs NO semantic relaxation
+    whatsoever: it parses exactly the FIRST complete JSON value from the
+    start of the string using the stdlib's own decoder, and discards only
+    whatever comes after it. If the text doesn't begin with a parseable
+    JSON value at all, it is returned completely unchanged, so the
+    existing, unmodified parse_appeal_draft_candidate() error path still
+    fires exactly as before this fix. This helper can only ever make a
+    trailing-artifact response parseable -- it can never turn genuinely
+    malformed or absent JSON into something that passes validation."""
+    if not isinstance(raw_text, str):
+        return raw_text
+    stripped = raw_text.strip()
+    if not stripped:
+        return raw_text
+    try:
+        obj, _end = json.JSONDecoder().raw_decode(stripped)
+    except (ValueError, TypeError):
+        return raw_text
+    return json.dumps(obj)
+
+
+# Bounded, narrowly-scoped retry for appeal DRAFTING/VALIDATION failures
+# only (added in direct response to empirically-confirmed intermittent
+# production evidence: a real Gemini appeal response rejected with
+# "raw output is not valid JSON: Extra data..."). Reuses the identical
+# system prompt and user content on every attempt -- never regenerates
+# the input, never touches Gate 3 eligibility, never weakens the
+# semantic firewall or citation checks, which are re-applied in full on
+# every attempt. Provider-layer (LLMProviderError) failures are NOT
+# retried at this layer -- GenAISDKProvider already has its own bounded
+# 503/UNAVAILABLE retry; adding a second retry layer on top of that
+# would only compound worst-case latency without benefit, since a
+# provider that already exhausted its own retry budget is not expected
+# to succeed on one more immediate call from here.
+_MAX_DRAFT_ATTEMPTS = 2
+
+
 def generate_appeal_draft(investigation: Investigation, provider: LLMProvider) -> AppealDraftResult:
     if not isinstance(investigation, Investigation):
         raise AppealIntegrationError(
@@ -257,32 +300,47 @@ def generate_appeal_draft(investigation: Investigation, provider: LLMProvider) -
     known_fact_ids = {f.id for f in investigation.ledger.facts}
     known_claim_ids = {c.id for c in investigation.ledger.claims}
 
-    try:
-        raw_text = provider.complete_json(_SYSTEM_PROMPT, _build_user_content(investigation, hypothesis))
-    except LLMProviderError as exc:
+    last_validation_error = None
+    for attempt in range(_MAX_DRAFT_ATTEMPTS):
+        try:
+            raw_text = provider.complete_json(_SYSTEM_PROMPT, _build_user_content(investigation, hypothesis))
+        except LLMProviderError as exc:
+            return AppealDraftResult(
+                success=False, investigation_id=investigation.investigation_id,
+                hypothesis_id=hypothesis.id, failure_stage="provider", failure_reason=str(exc),
+            )
+
+        cleaned_text = _extract_first_json_object(raw_text)
+
+        try:
+            candidate = parse_appeal_draft_candidate(
+                cleaned_text, known_fact_ids=known_fact_ids, known_claim_ids=known_claim_ids
+            )
+            # Defense in depth: schema-valid JSON is not sufficient.
+            # The prose itself must satisfy the appeal semantic contract.
+            _validate_appeal_prose_firewall(candidate.draft_text)
+        except SchemaValidationError as exc:
+            last_validation_error = exc
+            if attempt < _MAX_DRAFT_ATTEMPTS - 1:
+                continue  # ask again with the identical input; the check itself never changes
+            return AppealDraftResult(
+                success=False, investigation_id=investigation.investigation_id,
+                hypothesis_id=hypothesis.id, failure_stage="validation", failure_reason=str(exc),
+            )
+
         return AppealDraftResult(
-            success=False, investigation_id=investigation.investigation_id,
-            hypothesis_id=hypothesis.id, failure_stage="provider", failure_reason=str(exc),
+            success=True,
+            investigation_id=investigation.investigation_id,
+            hypothesis_id=hypothesis.id,
+            draft_text=candidate.draft_text,
+            cited_fact_ids=candidate.cited_fact_ids,
+            cited_claim_ids=candidate.cited_claim_ids,
         )
 
-    try:
-        candidate = parse_appeal_draft_candidate(
-            raw_text, known_fact_ids=known_fact_ids, known_claim_ids=known_claim_ids
-        )
-        # Defense in depth: schema-valid JSON is not sufficient.
-        # The prose itself must satisfy the appeal semantic contract.
-        _validate_appeal_prose_firewall(candidate.draft_text)
-    except SchemaValidationError as exc:
-        return AppealDraftResult(
-            success=False, investigation_id=investigation.investigation_id,
-            hypothesis_id=hypothesis.id, failure_stage="validation", failure_reason=str(exc),
-        )
-
+    # Unreachable in practice (the loop always returns), kept as a safe
+    # fallback rather than an unhandled fall-through.
     return AppealDraftResult(
-        success=True,
-        investigation_id=investigation.investigation_id,
-        hypothesis_id=hypothesis.id,
-        draft_text=candidate.draft_text,
-        cited_fact_ids=candidate.cited_fact_ids,
-        cited_claim_ids=candidate.cited_claim_ids,
+        success=False, investigation_id=investigation.investigation_id,
+        hypothesis_id=hypothesis.id, failure_stage="validation",
+        failure_reason=str(last_validation_error),
     )
