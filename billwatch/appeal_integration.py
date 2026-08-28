@@ -222,32 +222,13 @@ def _validate_appeal_prose_firewall(draft_text: str) -> None:
 
 
 
-def _extract_first_json_object(raw_text: str) -> str:
-    """Defensive cleanup for a confirmed, empirically-observed Gemini
-    output artifact: the model occasionally emits one well-formed JSON
-    object followed by trailing whitespace/newline (or other incidental
-    trailing content) after the closing brace, which strict json.loads()
-    parsing rejects as 'Extra data'. This performs NO semantic relaxation
-    whatsoever: it parses exactly the FIRST complete JSON value from the
-    start of the string using the stdlib's own decoder, and discards only
-    whatever comes after it. If the text doesn't begin with a parseable
-    JSON value at all, it is returned completely unchanged, so the
-    existing, unmodified parse_appeal_draft_candidate() error path still
-    fires exactly as before this fix. This helper can only ever make a
-    trailing-artifact response parseable -- it can never turn genuinely
-    malformed or absent JSON into something that passes validation."""
-    if not isinstance(raw_text, str):
-        return raw_text
-    stripped = raw_text.strip()
-    if not stripped:
-        return raw_text
-    try:
-        obj, _end = json.JSONDecoder().raw_decode(stripped)
-    except (ValueError, TypeError):
-        return raw_text
-    return json.dumps(obj)
-
-
+# NOTE: the trailing-JSON-artifact cleanup previously implemented here as
+# _extract_first_json_object() has been moved to the shared chokepoint
+# llm_schemas.py::_parse_json_object(), since the SAME artifact was also
+# independently observed at the hypothesis and extraction stages -- this
+# module still benefits from that fix automatically via
+# parse_appeal_draft_candidate() without needing its own copy.
+#
 # Bounded, narrowly-scoped retry for appeal DRAFTING/VALIDATION failures
 # only (added in direct response to empirically-confirmed intermittent
 # production evidence: a real Gemini appeal response rejected with
@@ -310,11 +291,9 @@ def generate_appeal_draft(investigation: Investigation, provider: LLMProvider) -
                 hypothesis_id=hypothesis.id, failure_stage="provider", failure_reason=str(exc),
             )
 
-        cleaned_text = _extract_first_json_object(raw_text)
-
         try:
             candidate = parse_appeal_draft_candidate(
-                cleaned_text, known_fact_ids=known_fact_ids, known_claim_ids=known_claim_ids
+                raw_text, known_fact_ids=known_fact_ids, known_claim_ids=known_claim_ids
             )
             # Defense in depth: schema-valid JSON is not sufficient.
             # The prose itself must satisfy the appeal semantic contract.

@@ -101,9 +101,42 @@ def _reject_if_domain_decision_fields_present(raw, context: str) -> None:
         )
 
 
-def _parse_json_object(raw_text: str, context: str) -> dict:
+def _strip_trailing_json_artifact(raw_text: str) -> str:
+    """Defensive cleanup for a confirmed, empirically-observed Gemini
+    output artifact: the model occasionally emits one well-formed JSON
+    value followed by trailing whitespace/newline or other incidental
+    trailing content after the closing brace, which strict json.loads()
+    rejects as 'Extra data'. This has been directly captured in
+    production/live diagnostics at the appeal, hypothesis, and
+    extraction stages -- it is a single quirk affecting all four
+    LLM-output contracts that flow through this shared function, not a
+    per-stage bug.
+
+    This performs NO semantic relaxation whatsoever: it parses exactly
+    the FIRST complete JSON value from the start of the (whitespace-
+    stripped) string using the stdlib's own decoder, and discards only
+    whatever comes after it. If the text doesn't begin with a parseable
+    JSON value at all, it is returned completely unchanged, so every
+    existing malformed-JSON rejection path (e.g. "not json {{{") still
+    fires exactly as before this fix -- confirmed against the full
+    existing test_llm_schemas.py suite, which contains no test relying
+    on trailing-content-after-valid-JSON being rejected."""
+    if not isinstance(raw_text, str):
+        return raw_text
+    stripped = raw_text.strip()
+    if not stripped:
+        return raw_text
     try:
-        parsed = json.loads(raw_text)
+        obj, _end = json.JSONDecoder().raw_decode(stripped)
+    except (ValueError, TypeError):
+        return raw_text
+    return json.dumps(obj)
+
+
+def _parse_json_object(raw_text: str, context: str) -> dict:
+    cleaned_text = _strip_trailing_json_artifact(raw_text)
+    try:
+        parsed = json.loads(cleaned_text)
     except (json.JSONDecodeError, TypeError) as exc:
         raise SchemaValidationError(f"{context}: raw output is not valid JSON: {exc}") from exc
     if not isinstance(parsed, dict):
