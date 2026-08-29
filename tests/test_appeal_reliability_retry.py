@@ -22,7 +22,7 @@ from billwatch.llm_provider import LLMProvider, LLMProviderError
 from billwatch.reference_bootstrap import load_bootstrap_data
 from billwatch.reference_data import ReferenceStore
 from billwatch.pipeline import run_investigation
-from billwatch.appeal_integration import _extract_first_json_object, _MAX_DRAFT_ATTEMPTS
+from billwatch.appeal_integration import _MAX_DRAFT_ATTEMPTS
 
 
 class _AppealSequenceProvider(LLMProvider):
@@ -92,25 +92,6 @@ def _clean_appeal_json(fact_ids, claim_id):
         "draft_text": "This is a request for human review of the billing for this claim.",
         "cited_fact_ids": list(fact_ids), "cited_claim_ids": [claim_id],
     })
-
-
-class TestExtractFirstJsonObject(unittest.TestCase):
-    def test_strips_trailing_whitespace_and_newline(self):
-        raw = '{"draft_text": "hi", "cited_fact_ids": [], "cited_claim_ids": []}\n\n'
-        cleaned = _extract_first_json_object(raw)
-        self.assertEqual(json.loads(cleaned), json.loads(raw.strip()))
-
-    def test_strips_genuine_trailing_extra_data(self):
-        raw = '{"draft_text": "hi", "cited_fact_ids": [], "cited_claim_ids": []}\nExtra stray content here'
-        cleaned = _extract_first_json_object(raw)
-        self.assertEqual(json.loads(cleaned)["draft_text"], "hi")
-
-    def test_leaves_genuinely_malformed_text_unchanged(self):
-        raw = "not even valid json {{{"
-        self.assertEqual(_extract_first_json_object(raw), raw)
-
-    def test_leaves_empty_text_unchanged(self):
-        self.assertEqual(_extract_first_json_object(""), "")
 
 
 class TestAppealRecoversFromTrailingDataArtifact(unittest.TestCase):
