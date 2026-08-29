@@ -238,9 +238,9 @@ INDEX_HTML = """<!DOCTYPE html>
 
 <div class="wrap">
   <section class="hero">
-    <div class="eyebrow">Medical Billing Investigation</div>
-    <h1>Find <em>billing errors</em><br>before you pay.</h1>
-    <p>BillWatch investigates your medical bill against real coding and billing rules -- and only drafts an appeal when the evidence genuinely supports one.</p>
+    <div class="eyebrow">Billing Investigation</div>
+    <h1>Investigate <em>billing accuracy</em><br>before you pay.</h1>
+    <p>BillWatch investigates your medical bills against real coding and billing rules, and only drafts an appeal when the evidence of a discrepancy genuinely supports one.</p>
     <div class="cta-row">
       <button type="button" class="primary" id="runDemoBtn" aria-label="Run a live BillWatch investigation using the discrepancy bill mock">Run Live Investigation (Discrepancy Bill Mock)</button>
       <button type="button" class="ghost" id="runCleanBtn" aria-label="Run a live BillWatch investigation using the clean bill mock">Run Live Investigation (Clean Bill Mock)</button>
