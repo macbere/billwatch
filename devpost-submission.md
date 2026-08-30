@@ -15,7 +15,7 @@ Official endpoint value: **2026-09-01T00:00:00Z**; Devpost labels the event time
 
 **Title:** BillWatch
 
-**Final recommended tagline:** An evidence-grounded Taskmaster that pauses instead of guessing.
+**Final recommended tagline:** An evidence-grounded Taskmaster for autonomous medical-bill investigation.
 
 > Use this tagline in the final Devpost form. It replaces the current live tagline, which says BillWatch drafts an appeal even though the public hackathon workflow does not draft or send appeals.
 
@@ -235,7 +235,7 @@ The verified public service is Google Cloud Run revision `billwatch-00014-ngm` i
 
 [https://github.com/macbere/billwatch](https://github.com/macbere/billwatch)
 
-On 2026-08-30, the tested hackathon build was synchronized to the public repository's `master` branch. The verified core build commit is `3353a79dc9aedb04288b3648a911bd77984c08ce`. This source workspace still has no `.git` directory, so future changes should be made from or synchronized through a proper Git checkout.
+On 2026-08-30, the tested hackathon build was synchronized and verified in the public repository's `master` branch and in the local Git checkout. The final audited repository checkpoint before this metadata-only correction is `2a200c6319d823da9a5cd1adaaaced8e5fcc4440`.
 
 If the repository remains private, grant access to the official judge accounts named in the Devpost form. Run a final secret and privacy scan before making any repository public.
 
@@ -310,7 +310,7 @@ Show the 533-test result, verified Cloud Run revision, and one-sentence takeaway
 | Category | Taskmaster | Ready |
 | Organization name | N/A | Confirmed by participant |
 | Project start date (MM-DD-YY) | 08-07-26 | Confirmed by participant; within the official submission period |
-| Repository URL | https://github.com/macbere/billwatch | Public and synchronized; core build commit `3353a79dc9aedb04288b3648a911bd77984c08ce` |
+| Repository URL | https://github.com/macbere/billwatch | Public and synchronized; final audited checkpoint before the metadata-only correction: `2a200c6319d823da9a5cd1adaaaced8e5fcc4440` |
 | Reproducible testing instructions in README | Yes | Ready |
 | Hosted URL | https://billwatch-403260979598.us-central1.run.app | Ready |
 | Additional testing instructions | Use the public and local steps above | Ready |
