@@ -54,7 +54,14 @@ def _now() -> datetime:
 # -- code format rules (deterministic, no LLM) --------------------------
 _HCPCS_CODE_RE = re.compile(r"^[A-V][0-9]{4}$")      # HCPCS Level II shape
 _ICD10_CODE_RE = re.compile(r"^[A-TV-Z][0-9][0-9A-Z](\.[0-9A-Z]{1,4})?$")
-_CPT_LIKE_CODE_RE = re.compile(r"^[0-9]{5}$")         # bare 5-digit numeric
+_NCCI_BILLING_CODE_RE = re.compile(
+    r"^(?:[0-9]{5}|[A-V][0-9]{4}|[0-9]{4}[A-Z])$"
+)
+
+
+def is_ncci_billing_code(value: str) -> bool:
+    """Return True only for code shapes present in CMS NCCI pair files."""
+    return bool(_NCCI_BILLING_CODE_RE.fullmatch(str(value or "").upper()))
 
 
 class LookupStatus(Enum):
@@ -124,6 +131,10 @@ class NCCIPairRecord:
     retrieval_date: date
     license_basis: str
     scope: str = "medicare_ncci_edit_set"
+    claim_setting: str = "practitioner"
+    deletion_date: Optional[date] = None
+    source_file: Optional[str] = None
+    source_sha256: Optional[str] = None
     id: str = field(default_factory=_new_id)
 
 
@@ -241,9 +252,9 @@ def validate_ncci_pair_record(rec: NCCIPairRecord) -> list:
         ref, rec.source, rec.source_url, rec.effective_date, rec.version,
         rec.retrieval_date, rec.license_basis,
     )
-    if not _CPT_LIKE_CODE_RE.match(rec.code_a or ""):
+    if not is_ncci_billing_code(rec.code_a):
         issues.append(f"{ref}: malformed code_a")
-    if not _CPT_LIKE_CODE_RE.match(rec.code_b or ""):
+    if not is_ncci_billing_code(rec.code_b):
         issues.append(f"{ref}: malformed code_b")
     if rec.code_a == rec.code_b:
         issues.append(f"{ref}: code_a and code_b must differ")
@@ -251,6 +262,18 @@ def validate_ncci_pair_record(rec: NCCIPairRecord) -> list:
         issues.append(f"{ref}: unrecognized relationship value {rec.relationship!r}")
     if rec.modifier_indicator not in {"0", "1", "9"}:
         issues.append(f"{ref}: unrecognized modifier_indicator {rec.modifier_indicator!r}")
+    if rec.claim_setting not in {"practitioner", "hospital_outpatient"}:
+        issues.append(f"{ref}: unrecognized claim_setting {rec.claim_setting!r}")
+    if rec.deletion_date is not None:
+        if not isinstance(rec.deletion_date, date):
+            issues.append(f"{ref}: invalid deletion_date")
+        elif isinstance(rec.effective_date, date) and rec.deletion_date < rec.effective_date:
+            issues.append(f"{ref}: deletion_date precedes effective_date")
+    if rec.relationship_verified:
+        if not rec.source_file or not rec.source_file.strip():
+            issues.append(f"{ref}: verified relationship requires source_file")
+        if not re.fullmatch(r"[0-9A-Fa-f]{64}", rec.source_sha256 or ""):
+            issues.append(f"{ref}: verified relationship requires a SHA-256 source hash")
     return issues
 
 
@@ -461,6 +484,17 @@ class ReferenceStore:
                         rationale=(
                             f"Record found but its effective_date ({rec.effective_date}) is "
                             f"after the queried as_of date ({as_of}); not automatically applicable."
+                        ),
+                    )
+                deletion_date = getattr(rec, "deletion_date", None)
+                if as_of is not None and deletion_date is not None and as_of > deletion_date:
+                    return LookupResult(
+                        status=LookupStatus.OUTSIDE_EFFECTIVE_PERIOD,
+                        record=rec,
+                        queried=queried_label,
+                        rationale=(
+                            f"Record found but its deletion_date ({deletion_date}) is "
+                            f"before the queried as_of date ({as_of}); the edit is not active."
                         ),
                     )
                 return LookupResult(

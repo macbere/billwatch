@@ -75,6 +75,7 @@ class AuthorityDecision:
     from (source, case_scope, claim_type, ncci_adoption_evidence) alone."""
     source_id: str
     source_type: SourceType
+    source_reference: str
     case_scope_value: CaseScopeValue
     case_scope_validation: ValidationResult
     source_scope: Optional[str]
@@ -103,6 +104,7 @@ def _decision(
     return AuthorityDecision(
         source_id=source.id,
         source_type=source.source_type,
+        source_reference=source.reference,
         case_scope_value=case_scope.value,
         case_scope_validation=case_scope.validation_result,
         source_scope=source.scope,
@@ -192,12 +194,19 @@ def evaluate_source_authority(
                 "Case scope is not established; CMS Medicare policy "
                 "applicability cannot be determined without guessing.",
             )
-        if case_scope.value in (CaseScopeValue.MEDICARE, CaseScopeValue.MEDICAID):
+        if case_scope.value == CaseScopeValue.MEDICARE:
             return _decision(
                 source, case_scope, claim_type, "cms_medicare.in_scope",
                 AuthorityResult.AUTHORITATIVE,
-                "CMS Medicare/Medicaid coverage policy is authoritative "
-                "within confirmed Medicare/Medicaid scope.",
+                "CMS Medicare coverage policy is authoritative within "
+                "confirmed Medicare scope.",
+            )
+        if case_scope.value == CaseScopeValue.MEDICAID:
+            return _decision(
+                source, case_scope, claim_type, "cms_medicare.medicaid_out_of_scope",
+                AuthorityResult.OUT_OF_SCOPE,
+                "CMS Medicare coverage policy does not establish Medicaid "
+                "coverage terms; a Medicaid-specific source is required.",
             )
         return _decision(
             source, case_scope, claim_type, "cms_medicare.private_out_of_scope",
@@ -216,13 +225,21 @@ def evaluate_source_authority(
                 "Case scope is not established; NCCI applicability cannot "
                 "be determined without guessing (Scenario D).",
             )
-        if case_scope.value in (CaseScopeValue.MEDICARE, CaseScopeValue.MEDICAID):
+        if case_scope.value == CaseScopeValue.MEDICARE:
             # Scenario A.
             return _decision(
                 source, case_scope, claim_type, "cms_ncci.medicare_scope",
                 AuthorityResult.AUTHORITATIVE,
-                "NCCI methodology is authoritative within confirmed "
-                "Medicare/Medicaid scope (Scenario A).",
+                "Medicare NCCI methodology is authoritative within "
+                "confirmed Medicare scope (Scenario A).",
+            )
+        if case_scope.value == CaseScopeValue.MEDICAID:
+            return _decision(
+                source, case_scope, claim_type, "cms_ncci.medicaid_out_of_scope",
+                AuthorityResult.OUT_OF_SCOPE,
+                "This CMS NCCI dataset is a Medicare reference; it does not "
+                "establish Medicaid applicability. A Medicaid-specific NCCI "
+                "source is required.",
             )
         # Private-commercial, scope established.
         if ncci_adoption_evidence is not None:
@@ -353,9 +370,31 @@ def flag_potential_conflict(
     if decision_a.source_id == decision_b.source_id:
         return None
     if decision_a.result in _USABLE_FOR_CONFLICT and decision_b.result in _USABLE_FOR_CONFLICT:
+        if _decision_fingerprint(decision_a) == _decision_fingerprint(decision_b):
+            return None
         return PotentialConflict(
             claim_type=decision_a.claim_type,
             decision_a=decision_a,
             decision_b=decision_b,
         )
     return None
+
+
+def _decision_fingerprint(decision: AuthorityDecision) -> tuple:
+    """Return the semantic identity of a decision, excluding generated IDs.
+
+    Repeating the same lookup must not manufacture a conflict merely because
+    each call created a fresh Source/AuthorityDecision identifier. Distinct
+    references or rules remain eligible for conflict detection.
+    """
+    return (
+        decision.source_type,
+        decision.source_reference,
+        decision.case_scope_value,
+        decision.case_scope_validation,
+        decision.source_scope,
+        decision.claim_type,
+        decision.rule_applied,
+        decision.result,
+        decision.rationale,
+    )

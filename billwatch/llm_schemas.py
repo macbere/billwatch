@@ -223,6 +223,12 @@ def parse_extraction_candidate(raw_text: str, document, known_fact_types=_VALID_
             ))
             continue
 
+        if fact_type == "code" and value not in source_span:
+            rejected.append(RejectedFact(
+                index=i, reason="code value is not contained in its cited source_span"
+            ))
+            continue
+
         confidence = item.get("confidence")
         if confidence is not None and not isinstance(confidence, str):
             rejected.append(RejectedFact(index=i, reason="confidence must be a string or null"))

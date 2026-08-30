@@ -1,0 +1,3 @@
+Itemized synthetic test bill
+CPT 99213 - Office visit - $180.00
+CPT 93000 - Test - $75.00

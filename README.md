@@ -1,163 +1,152 @@
 # BillWatch
 
-**All Things Agentic Hackathon — Taskmaster track**
+BillWatch is an evidence-grounded medical-bill investigation proof of concept for the All Things Agentic Hackathon. A person can paste arbitrary supported medical-bill text or choose a TXT, CSV, or JSON file. BillWatch extracts literal facts with exact source evidence, evaluates every unique code pair, checks bounded reference metadata, pauses when required context is missing, and produces a cautious report for human review.
 
-BillWatch is an agentic medical-bill investigator. It runs a guarded, multi-step
-investigation pipeline against a bill, and only when the evidence genuinely
-supports a discrepancy does it draft an appeal for human review.
+BillWatch does not claim that a bill is definitely wrong. It does not provide medical, legal, insurance, coding, or payment advice.
 
-**Live demo:** https://billwatch-403260979598.us-central1.run.app
+## Public proof of concept
 
-## Problem
+- URL: https://billwatch-403260979598.us-central1.run.app
+- Cloud Run service: `billwatch`
+- Region: `us-central1`
+- Verified revision: `billwatch-00014-ngm`
+- Traffic: 100% to the verified revision
 
-Medical billing errors are common, but disputing them today requires either the
-patient's own coding/policy literacy or a paid medical billing advocate. Most
-patients have neither the time nor the expertise to catch an improperly billed
-code pair.
+The investigation and approval state exists only in the active browser tab. Refreshing or closing the tab clears it. Raw bill text is processed transiently by the server and is not written to BillWatch application logs or durable storage. When the public service has Gemini enabled, ordinary extraction may send the submitted text to Gemini; the synthetic guided demo is deterministic and does not depend on Gemini.
 
-## Solution
+## Existing behavior and hackathon additions
 
-BillWatch executes a controlled, multi-step workflow rather than acting as a
-conversational chatbot:
+The original application already accepted arbitrary medical-bill text, extracted exact source-cited facts, generated every unique code pair, used fail-closed reference checks, separated AI proposals from deterministic decisions, enforced limits, and rejected `GET /investigate`.
 
-    Bill -> Scope -> Evidence -> Verification -> Decision -> Appeal
+The hackathon build extends those inspected components with:
 
-An LLM (Gemini) may extract facts, propose hypotheses, and propose what to
-verify -- but every consequential decision (is a source authoritative, is
-evidence sufficient, what is the final status, is an appeal eligible) is made
-by deterministic Python code, never the model. The appeal-drafting step is
-only reachable after the deterministic pipeline itself reaches a
-SUPPORTED_DISCREPANCY state.
+- truthful completed-stage and structured missing-context metadata;
+- one isolated, explicitly selected synthetic demo path;
+- a real missing-context pause and fresh-POST Resume flow;
+- an append-only browser timeline with human confirmation events;
+- a compact retained view of earlier attempts;
+- honest failure and Retry states;
+- a simulated browser-local approval boundary that sends nothing; and
+- a prominent active-tab-only privacy notice.
 
-## Core Architectural Principle
+It does not connect the deeper internal pipeline to the public workflow, import official NCCI files, add accounts or a database, send an appeal, contact a provider or payer, or perform a payment action.
 
-> LLMs populate structured fields. Deterministic code decides what those fields mean.
+## Guided synthetic demonstration
 
-Every LLM response is treated as untrusted input. It is parsed by a strict
-schema validator that rejects anything malformed, out-of-contract, or
-attempting to smuggle a domain decision (final_status, case_scope,
-authority_result, appeal_eligible, and related terms) -- the entire candidate
-is discarded, not repaired, if this happens anywhere in the response, at any
-nesting depth.
+The separate **Hackathon Demo · synthetic** card uses exactly one public author-written rule for `BW-DEMO-001` and `BW-DEMO-002`.
 
-## Architecture
+These are demonstration identifiers. They are not CPT or HCPCS codes and are not CMS, AMA, insurer, payer, or clinical data. The rule is stored separately from the illustrative unverified NCCI fixture and can be reached only with the exact internal demo-mode value.
 
-See `ARCHITECTURE.md` for the full pipeline diagram and `billwatch-architecture.svg`
-for a visual summary. Summary:
+To reproduce the main proof:
 
-    Document(s)
-      -> Extraction        (LLM proposes facts; schema validates; recorded in EvidenceLedger)
-      -> Case Scope         (deterministic; Medicare/Medicaid/private, never guessed)
-      -> Hypothesis          (LLM proposes one candidate explanation; schema validates)
-      -> Verification        (LLM proposes source types to check; real deterministic lookups
-                               against HCPCS/ICD-10/NCCI-style reference data; real authority decision)
-      -> Adjudication         (pure deterministic Python -- computes SUPPORTED_DISCREPANCY /
-                               NO_SUPPORTED_DISCREPANCY / INSUFFICIENT_EVIDENCE /
-                               CONFLICTING_EVIDENCE from the evidence gathered above)
-      -> Appeal (conditional)  (only reachable if SUPPORTED_DISCREPANCY; drafts appeal text
-                                citing only real ledger facts/claims; transient, never persisted)
+1. Open the public URL and note **Active browser tab only.**
+2. Select **Load synthetic guided example**.
+3. Select **Analyze Bill** without adding context.
+4. Confirm that BillWatch pauses at `INSUFFICIENT_CONTEXT`, keeps both exact identifier spans visible, and asks only for service date, same-date confirmation, and same-beneficiary/claim confirmation.
+5. Enter `2026-08-01`, select both confirmations, and choose **Resume investigation**.
+6. Confirm that the timeline records the human input, Attempt 1 remains expandable, a new request ID appears, and the newest result is the bounded `POTENTIAL_DISCREPANCY` review signal.
+7. Select **Approve simulated step** or **Reject simulated step** and confirm the message: **Nothing was sent.**
+8. Refresh the tab and confirm that the investigation disappears.
 
-**Web UI:** a stdlib-only Python HTTP server (`app.py`) serves a single-page
-embedded HTML/CSS/JS frontend at `/`, and the JSON API at `/health` and
-`/investigate`. The frontend calls `/investigate` with a relative fetch, so
-it works identically in local development and on Cloud Run.
+## Safety model
 
-## Technology Stack
+Gemini is an optional literal-fact extraction assistant. Its output is untrusted. Deterministic Python validation controls:
 
-- **Language:** Python 3.14 (stdlib-only for the deterministic core and web server)
-- **LLM:** Google Gemini, model `gemini-3.5-flash`, accessed via the official
-  `google-genai` SDK (`google-genai==2.17.0`) -- satisfies the hackathon's
-  Google Agent Framework requirement
-- **Cloud infrastructure:** Google Cloud Run (project `gen-lang-client-0537118940`,
-  region `us-central1`)
-- **Platform:** developed and tested natively on Android (Termux)
+- source-span and code-value integrity;
+- supported code shapes and unique-pair expansion;
+- payer/program, date, modifier, same-date, and same-claim gates;
+- reference provenance, checksum, scope, effective period, verification, and licence metadata;
+- final result labels;
+- request-size, pair, and rate limits; and
+- whether a result may be presented as a potential discrepancy.
 
-## Gemini's Role
+AI cannot declare that a bill is wrong. Uncertain extraction or applicability fails closed. The approval control changes only the JavaScript object held by the current page; it performs no fetch, navigation, copy, download, publication, message, or external action.
 
-Gemini is used only to populate structured candidate fields at three points:
-evidence extraction, hypothesis generation, and verification-source proposals.
-It never determines final_status, case_scope, source authority, or appeal
-eligibility -- those are computed by deterministic code that has no LLM input
-at all.
+## Reference-data limitation
 
-## Safety Guardrails (the three hard gates)
+The checked-in `billwatch/reference_bootstrap.py` data is a small illustrative snapshot. Its NCCI relationship is explicitly unverified, so the public app returns `REFERENCE_UNVERIFIED` and cannot use it to produce a potential discrepancy.
 
-1. **Scope/Authority Gate** -- authority is contextual per (source_type,
-   case_scope, claim_type); CMS/NCCI-style sources are never globally
-   authoritative.
-2. **User-Bias Gate** -- the user's own stated concern (UserContext) is
-   structurally separate from evidence and can never enter the
-   reasoning/evidence pipeline.
-3. **Appeal-Anyway Gate** -- appeal drafting is code-gated (not prompt-gated)
-   on `final_status == SUPPORTED_DISCREPANCY`; no natural-language
-   instruction can bypass it.
+The repository also contains a fail-closed importer and checksum-verified read-only SQLite repository for reference files a user legally obtained. They are not connected to the public app. Protected CMS or AMA data must not be downloaded, imported, or published without an appropriate licence.
 
-## Data Sources
+## Repository layout
 
-The current demo scenario investigates a fixed bill containing CPT/HCPCS
-codes `45378` and `45380` billed on the same date of service. Verification
-runs against reference coding/billing bundling data (CMS/NCCI-style
-Procedure-to-Procedure rules) loaded in-process via
-`billwatch/reference_bootstrap.py` and `billwatch/reference_data.py`. The
-current product demonstrates this fixed scenario end-to-end; it does not
-yet ingest arbitrary uploaded bills.
+- `app.py` — public inline HTML/CSS/JavaScript interface and JSON API.
+- `billwatch/arbitrary_analysis.py` — ordinary arbitrary-input extraction and bounded pair analysis.
+- `billwatch/synthetic_demo.py` — the isolated author-written public demo rule.
+- `billwatch/llm_schemas.py` — strict AI-output validation.
+- `billwatch/reference_data.py` — immutable, versioned, fail-closed reference store.
+- `billwatch/pipeline.py` — deeper internal pipeline that is not presented as the public workflow.
+- `tests/` — deterministic unit, API, UI-contract, and safety tests.
+- `docs/hackathon-build/` — approved scope, PRD, technical spec, checklist, and evidence notes.
 
-## Installation
+## Installation and local use
 
-    cd ~/billwatch
-    python3 -m pip install google-genai   # only needed for live Gemini calls
+Python 3.11 or newer is recommended.
 
-No other dependencies -- the deterministic core is Python standard library only.
+```text
+python -m pip install -r requirements-dev.txt
+```
 
-## Environment Variables
+`GEMINI_API_KEY` is optional. Without it, the ordinary app uses a deterministic input-driven offline extractor and does not pretend Gemini ran.
 
-    export GEMINI_API_KEY='your-real-key-here'   # optional -- only for a real Gemini run
+Linux, macOS, or Termux:
 
-Without `GEMINI_API_KEY` set, both `demo.py` and `app.py` fall back to
-`MockLLMProvider`, so everything runs fully offline.
+```text
+export GEMINI_API_KEY='your-key'   # optional
+PORT=8091 python app.py
+```
 
-## Testing
+Windows PowerShell:
 
-    cd ~/billwatch
-    python3 -m pytest -q
+```text
+$env:GEMINI_API_KEY = 'your-key'   # optional
+$env:PORT = '8091'
+python app.py
+```
 
-Current result: **400 passed, 1 warning**. All automated tests use
-`MockLLMProvider` or an in-process test server -- no real network or API
-calls are made by the test suite.
+Open `http://127.0.0.1:8091/`.
 
-## Running Locally
+## API
 
-    cd ~/billwatch
-    export GEMINI_API_KEY='your-real-key-here'   # optional
-    PORT=8091 python3 app.py
+Investigations use `POST /investigate`. `GET /investigate` intentionally returns HTTP 405.
 
-Then open `http://127.0.0.1:8091/` in a browser, or run the CLI demo:
+```json
+{
+  "bill_text": "CPT 99213 Office visit $180.00",
+  "payer_scope": "unknown",
+  "service_date": null,
+  "modifiers": [],
+  "same_date_confirmed": null,
+  "same_beneficiary_confirmed": null,
+  "claim_status": null
+}
+```
 
-    python3 demo.py
+The backward-compatible response includes facts, findings, status, missing context, a request ID, operating mode, and reference provenance where a lookup occurred. Optional hackathon fields describe completed stages and resumable context.
 
-## Deployment
+## Verification evidence
 
-BillWatch is deployed to Google Cloud Run:
+Final local results:
 
-    gcloud run deploy billwatch \
-      --source . \
-      --project=gen-lang-client-0537118940 \
-      --region=us-central1 \
-      --allow-unauthenticated \
-      --set-env-vars="GEMINI_API_KEY=${GEMINI_API_KEY}" \
-      --quiet
+- `unittest`: 533 tests passed in 2.241 seconds; baseline was 488.
+- `pytest`: 533 tests plus 24 subtests passed in 5.60 seconds; baseline was 488 tests plus 10 subtests.
+- focused synthetic module: 12 passed.
+- synthetic/analyzer/API isolation group: 42 passed.
+- analyzer/API/state-machine group: 40 passed.
 
-`GEMINI_API_KEY` is always supplied as a Cloud Run environment variable at
-deploy time -- it is never present in source code, Docker image layers, or
-git history.
+Public revision checks passed for `/health`, `/`, POST-only investigation, ordinary no-match wording, unverified-reference blocking, isolated synthetic pause/resume, distinct request IDs, retained Attempt 1, simulated approval with no navigation or new tab, and refresh clearing. A synthetic privacy marker produced zero Cloud Logging matches, and the deployed revision produced zero error-level log entries during verification.
 
-## Live Demo
+Docker was not installed on the Windows build host, so a separate local Docker run was unavailable. Google Cloud built the unchanged Dockerfile successfully when creating the verified public revision.
 
-Open the production URL and click **Run Live Investigation**:
+## Known proof-of-concept limitations
 
-https://billwatch-403260979598.us-central1.run.app
+- Investigation history is lost on refresh or tab close.
+- There are no user accounts, durable sessions, or server-side case records.
+- The public reference snapshot is illustrative and not current official NCCI data.
+- Approval is simulated and cannot send or publish anything.
+- The proof of concept is not a production compliance solution for protected health information.
+- A production release would require a formal privacy, security, licensing, accessibility, reliability, and cost review.
 
-This calls the real, deployed `/investigate` endpoint (the same backend
-verified by the automated test suite) and walks through the actual
-Scope -> Evidence -> Verification -> Decision -> Appeal pipeline, showing a
-live Gemini-drafted appeal when a supported discrepancy is found.
+## License
+
+No open-source licence is currently included. Unless the owner adds one, treat the repository as all rights reserved.

@@ -258,20 +258,20 @@ class TestAppealGatingByFinalStatus(unittest.TestCase):
         self.assertEqual(result.final_status, FinalStatus.INSUFFICIENT_EVIDENCE)
         self.assertIsNone(result.appeal)
 
-    def test_conflicting_evidence_prevents_appeal(self):
+    def test_repeated_identical_evidence_does_not_create_conflict(self):
         inv, doc = _fresh_investigation_with_doc()
         facts = [{"fact_type": "code", "value": "45378", "source_span": "45378"},
                  {"fact_type": "code", "value": "45380", "source_span": "45380"}]
-        # Duplicate CMS_NCCI proposal under Medicare scope -> two usable
-        # decisions on the same claim -> flagged as a Conflict.
+        # Duplicate CMS_NCCI proposal under Medicare scope -> repeated
+        # identical evidence, not conflicting evidence.
         provider = _make_dispatch_provider(doc, facts, source_types=("CMS_NCCI", "CMS_NCCI"))
         store = _bootstrapped_store()
 
         result = run_investigation(inv, [doc], _medicare_scope(), provider, store)
 
         self.assertTrue(result.success)
-        self.assertEqual(result.final_status, FinalStatus.CONFLICTING_EVIDENCE)
-        self.assertIsNone(result.appeal)
+        self.assertEqual(result.final_status, FinalStatus.SUPPORTED_DISCREPANCY)
+        self.assertIsNotNone(result.appeal)
 
     def test_supported_discrepancy_permits_appeal(self):
         inv, doc = _fresh_investigation_with_doc()

@@ -88,6 +88,76 @@ class TestNCCIPairLookup(unittest.TestCase):
         result = store.lookup_ncci_pair("99213", "99214")
         self.assertEqual(result.status, LookupStatus.UNKNOWN)
 
+    def test_ncci_accepts_official_alphanumeric_code_shapes(self):
+        store = ReferenceStore()
+        records = [
+            NCCIPairRecord(
+                code_a="G0471",
+                code_b="0591T",
+                relationship="column2_bundled_into_column1",
+                modifier_indicator="0",
+                relationship_verified=False,
+                source="Synthetic parser fixture",
+                source_url="https://www.cms.gov/",
+                effective_date=date(2026, 7, 1),
+                version="shape-test",
+                retrieval_date=date(2026, 8, 29),
+                license_basis="public_cms_ncci",
+            ),
+            NCCIPairRecord(
+                code_a="0001A",
+                code_b="45378",
+                relationship="column2_bundled_into_column1",
+                modifier_indicator="1",
+                relationship_verified=False,
+                source="Synthetic parser fixture",
+                source_url="https://www.cms.gov/",
+                effective_date=date(2026, 7, 1),
+                version="shape-test",
+                retrieval_date=date(2026, 8, 29),
+                license_basis="public_cms_ncci",
+            ),
+        ]
+        snapshot, rejections = store.load_snapshot(
+            dataset_name="ncci_ptp",
+            records=records,
+            source="Synthetic parser fixture",
+            source_url="https://www.cms.gov/",
+            effective_date=date(2026, 7, 1),
+            retrieval_date=date(2026, 8, 29),
+            version="shape-test",
+            license_basis="public_cms_ncci",
+        )
+        self.assertEqual(len(snapshot.records), 2)
+        self.assertEqual(rejections, [])
+
+    def test_verified_ncci_record_requires_file_and_sha256_provenance(self):
+        store = ReferenceStore()
+        record = NCCIPairRecord(
+            code_a="45380",
+            code_b="45378",
+            relationship="column2_bundled_into_column1",
+            modifier_indicator="0",
+            relationship_verified=True,
+            source="Synthetic parser fixture",
+            source_url="https://www.cms.gov/",
+            effective_date=date(2026, 7, 1),
+            version="missing-hash",
+            retrieval_date=date(2026, 8, 29),
+            license_basis="public_cms_ncci",
+        )
+        with self.assertRaises(ReferenceDataError):
+            store.load_snapshot(
+                dataset_name="ncci_ptp",
+                records=[record],
+                source="Synthetic parser fixture",
+                source_url="https://www.cms.gov/",
+                effective_date=date(2026, 7, 1),
+                retrieval_date=date(2026, 8, 29),
+                version="missing-hash",
+                license_basis="public_cms_ncci",
+            )
+
 
 class TestMalformedAndInvalidRecords(unittest.TestCase):
     """7. malformed reference record / 8. missing provenance / 9. unsupported license basis."""
@@ -169,6 +239,39 @@ class TestEffectiveDateHandling(unittest.TestCase):
         store = _bootstrapped_store()
         result = store.lookup_hcpcs("A0425", as_of=date(2026, 12, 31))
         self.assertEqual(result.status, LookupStatus.FOUND)
+
+    def test_ncci_deletion_date_ends_active_period(self):
+        store = ReferenceStore()
+        record = NCCIPairRecord(
+            code_a="45380",
+            code_b="45378",
+            relationship="column2_bundled_into_column1",
+            modifier_indicator="0",
+            relationship_verified=False,
+            source="Synthetic parser fixture",
+            source_url="https://www.cms.gov/",
+            effective_date=date(2026, 1, 1),
+            deletion_date=date(2026, 6, 30),
+            version="deleted-test",
+            retrieval_date=date(2026, 8, 29),
+            license_basis="public_cms_ncci",
+        )
+        store.load_snapshot(
+            dataset_name="ncci_ptp",
+            records=[record],
+            source="Synthetic parser fixture",
+            source_url="https://www.cms.gov/",
+            effective_date=date(2026, 1, 1),
+            retrieval_date=date(2026, 8, 29),
+            version="deleted-test",
+            license_basis="public_cms_ncci",
+        )
+        self.assertEqual(
+            store.lookup_ncci_pair(
+                "45378", "45380", as_of=date(2026, 7, 1)
+            ).status,
+            LookupStatus.OUTSIDE_EFFECTIVE_PERIOD,
+        )
 
 
 class TestSnapshotImmutabilityAndVersioning(unittest.TestCase):

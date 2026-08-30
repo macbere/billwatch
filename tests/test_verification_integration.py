@@ -352,10 +352,10 @@ class TestInsufficientEvidence(unittest.TestCase):
 # ---------------------------------------------------------------------
 class TestConflictingEvidence(unittest.TestCase):
 
-    def test_duplicate_ncci_proposal_under_medicare_scope_flags_conflict(self):
-        # Two independent, usable AUTHORITATIVE decisions for the same
-        # claim_type (each lookup mints a fresh Source id) -- the system
-        # must flag this as a Conflict, never silently merge/dedupe it.
+    def test_duplicate_ncci_proposal_under_medicare_scope_does_not_fake_conflict(self):
+        # Repeating the same lookup mints a fresh Source id, but it is the
+        # same semantic evidence. Generated IDs alone must not create a
+        # Conflict.
         inv, hyp = _investigation_with_hypothesis(["45378", "45380"], medicare_scope=True)
         store = _bootstrapped_store()
         raw = _valid_verification_json(hyp.id, ["CMS_NCCI", "CMS_NCCI"])
@@ -365,8 +365,8 @@ class TestConflictingEvidence(unittest.TestCase):
 
         self.assertTrue(result.success)
         self.assertEqual(len(inv.ledger.verifications), 2)
-        self.assertEqual(len(result.conflict_ids), 1)
-        self.assertEqual(len(inv.ledger.conflicts), 1)
+        self.assertEqual(len(result.conflict_ids), 0)
+        self.assertEqual(len(inv.ledger.conflicts), 0)
 
 
 # ---------------------------------------------------------------------

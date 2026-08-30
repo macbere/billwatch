@@ -90,9 +90,7 @@ _NO_LOOKUP_SOURCE_TYPES = {
     ),
 }
 
-_USABLE_RESULTS = frozenset({
-    AuthorityResult.AUTHORITATIVE, AuthorityResult.CORROBORATING, AuthorityResult.ADMISSIBLE,
-})
+_USABLE_RESULTS = frozenset({AuthorityResult.AUTHORITATIVE})
 
 
 def _corroboration_result_for(decision) -> str:

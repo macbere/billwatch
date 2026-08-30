@@ -24,8 +24,8 @@ What is NOT independently re-verified against a live file this session:
 every record below has description_verified / relationship_verified set
 to False. Treat every description and relationship here as "plausible,
 citation-accurate, but not confirmed against the current live file" --
-never as a guaranteed-current fact. See BUILD3-REPORT.md, Section 13, for
-the documented real acquisition procedure to replace this file.
+never as a guaranteed-current fact. See README.md, Reference-data limitation,
+for the documented production requirements before replacing this file.
 """
 
 from datetime import date

@@ -73,9 +73,9 @@ class TestAuthoritativePreserved(unittest.TestCase):
         self.assertEqual(inv.ledger.verifications[0].corroboration_result, "corroborated")
 
 
-class TestCorroboratingPreserved(unittest.TestCase):
+class TestPrivateNcciDoesNotCorroborate(unittest.TestCase):
 
-    def test_private_ncci_no_adoption_evidence_preserves_corroborating(self):
+    def test_private_ncci_no_adoption_evidence_stays_silent(self):
         inv, hyp = _investigation_with_hypothesis(
             ["45378", "45380"], scope_value=CaseScopeValue.PRIVATE_COMMERCIAL
         )
@@ -85,7 +85,7 @@ class TestCorroboratingPreserved(unittest.TestCase):
 
         self.assertTrue(result.success)
         self.assertEqual(inv.ledger.verifications[0].authority_result, "corroborating")
-        self.assertEqual(inv.ledger.verifications[0].corroboration_result, "corroborated")
+        self.assertEqual(inv.ledger.verifications[0].corroboration_result, "silent")
 
 
 class TestAdmissibleCanBePreserved(unittest.TestCase):

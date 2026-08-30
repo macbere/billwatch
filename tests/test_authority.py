@@ -90,12 +90,21 @@ class TestCmsNcciScopeRule(unittest.TestCase):
                 ncci_adoption_evidence=uc,
             )
 
-    def test_medicaid_scope_also_authoritative(self):
+    def test_medicaid_scope_requires_medicaid_specific_reference(self):
         medicaid_scope = resolve_case_scope(user_selection="medicaid", source_identifier="test")
         decision = evaluate_source_authority(
             _ncci_source(), medicaid_scope, ClaimType.CODING_BUNDLING
         )
-        self.assertEqual(decision.result, AuthorityResult.AUTHORITATIVE)
+        self.assertEqual(decision.result, AuthorityResult.OUT_OF_SCOPE)
+        self.assertIn("Medicaid-specific", decision.rationale)
+
+    def test_cms_medicare_policy_is_not_medicaid_policy(self):
+        source = Source(source_type=SourceType.CMS_MEDICARE, reference="Medicare policy")
+        medicaid_scope = resolve_case_scope(user_selection="medicaid", source_identifier="test")
+        decision = evaluate_source_authority(
+            source, medicaid_scope, ClaimType.COVERAGE_TERMS
+        )
+        self.assertEqual(decision.result, AuthorityResult.OUT_OF_SCOPE)
 
 
 class TestScopeConditionalGenerally(unittest.TestCase):
@@ -260,6 +269,13 @@ class TestConflictPreparation(unittest.TestCase):
         # right -- it returns both decisions unresolved.
         self.assertIn(conflict.decision_a.result, (AuthorityResult.AUTHORITATIVE, AuthorityResult.CORROBORATING))
         self.assertIn(conflict.decision_b.result, (AuthorityResult.AUTHORITATIVE, AuthorityResult.CORROBORATING))
+
+    def test_identical_authoritative_references_do_not_self_conflict(self):
+        source_a = Source(source_type=SourceType.PLAN_POLICY, reference="same policy text")
+        source_b = Source(source_type=SourceType.PLAN_POLICY, reference="same policy text")
+        decision_a = evaluate_source_authority(source_a, _private_scope(), ClaimType.COVERAGE_TERMS)
+        decision_b = evaluate_source_authority(source_b, _private_scope(), ClaimType.COVERAGE_TERMS)
+        self.assertIsNone(flag_potential_conflict(decision_a, decision_b))
 
     def test_no_conflict_flagged_across_different_claim_types(self):
         plan_source = Source(source_type=SourceType.PLAN_POLICY, reference="Plan doc A")

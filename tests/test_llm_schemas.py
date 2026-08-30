@@ -162,6 +162,18 @@ class TestExtractionCandidate(unittest.TestCase):
         self.assertEqual(result.accepted_facts[0].fact_type, "code")
         self.assertEqual(len(result.rejected_facts), 0)
 
+    def test_code_value_must_appear_in_source_span(self):
+        raw = json.dumps({
+            "document_id": self.document.id,
+            "extracted_facts": [
+                {"fact_type": "code", "value": "99999", "source_span": "CPT 99213"}
+            ],
+        })
+        result = parse_extraction_candidate(raw, self.document)
+        self.assertEqual(len(result.accepted_facts), 0)
+        self.assertEqual(len(result.rejected_facts), 1)
+        self.assertIn("code value is not contained", result.rejected_facts[0].reason)
+
     def test_all_five_authoritative_fact_types_accepted(self):
         # Per direct repository inspection of evidence.py::ExtractedFact --
         # five values, correcting the Stage 2 design report's "4" error.
