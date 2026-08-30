@@ -29,7 +29,7 @@ Medical bills combine codes, dates, amounts, payer rules, and claim context that
 
 ## Solution
 
-BillWatch turns review into a bounded Taskmaster workflow. It extracts only source-cited facts, checks every supported code pair, validates reference applicability, pauses for specific missing context, resumes after human confirmation, and produces an auditable report with a cautious next step.
+BillWatch turns review into a bounded Taskmaster workflow. It autonomously extracts source-cited facts, expands and checks every supported code pair, validates reference applicability, identifies missing context, and produces an auditable report with a cautious next step. When evidence required for a safe determination is absent, it pauses rather than inventing it and resumes through a fresh request after supported human context is supplied.
 
 ## Why This Matters
 
@@ -91,11 +91,11 @@ Ordinary Gemini output is treated as untrusted input. The model may propose lite
 
 Browser progress is intentionally held only in one JavaScript investigation object in the active page. There are no server sessions, user accounts, case records, `localStorage`, or `sessionStorage`. Refreshing or closing the tab clears the investigation.
 
-### What existed before the hackathon and what was added
+### Hackathon development history
 
-The original BillWatch application already accepted arbitrary medical-bill text, extracted exact source-cited facts, generated unique code pairs, used fail-closed reference checks, separated AI proposals from deterministic decisions, enforced safety limits, and rejected `GET /investigate`.
+BillWatch was created during the All Things Agentic submission period. Earlier hackathon iterations established arbitrary medical-bill input, exact source-cited fact extraction, unique code-pair generation, fail-closed reference checks, deterministic decision boundaries, safety limits, and rejection of `GET /investigate`.
 
-The hackathon work added the guided Taskmaster experience: truthful stage metadata, structured missing-context fields, a real pause and fresh-POST resume loop, retained browser attempts, human timeline events, honest Retry states, the isolated synthetic proof path, the browser-local simulated approval boundary, expanded safety tests, a prominent active-tab notice, and the verified public Cloud Run revision.
+Later hackathon iterations added the guided Taskmaster experience: truthful stage metadata, structured missing-context fields, a real pause and fresh-POST resume loop, retained browser attempts, human timeline events, honest Retry states, the isolated synthetic proof path, the browser-local simulated approval boundary, expanded safety tests, a prominent active-tab notice, and the verified public Cloud Run revision.
 
 ### Challenges
 
@@ -140,7 +140,7 @@ A production path would require formally licensed and current reference data, a 
 
 ## Judging alignment
 
-- **Innovation and operational utility (40%):** the central capability is a genuine missing-context pause, human confirmation, and safe resume rather than an unsupported one-shot answer.
+- **Innovation and operational utility (40%):** BillWatch autonomously performs the multi-step investigation—evidence extraction, exact-evidence validation, pair expansion, bounded reference checks, applicability gating, and result generation—while using a genuine missing-context pause only when required evidence cannot safely be inferred.
 - **Architectural discipline and technology stack (30%):** Gemini 3.5 Flash proposes ordinary literal facts, deterministic gates own consequential decisions, and the public service runs on Cloud Run with a deliberately isolated synthetic path.
 - **Demo and production readiness (30%):** the service is publicly reachable, the core journey is repeatable, 533 tests pass, five screenshots are prepared, and the video plan includes visible Cloud backend proof and fail-closed safety cases.
 
@@ -175,9 +175,9 @@ literal facts            Deterministic extraction
  Human confirmation / browser-local approval only
 ```
 
-Devpost-ready architecture upload: `output/pdf/billwatch-hackathon-architecture.pdf`
+Canonical architecture for GitHub, Devpost, and the demo video: `output/pdf/billwatch-hackathon-architecture.pdf`
 
-The older root-level `billwatch-architecture.svg` describes a deeper appeal-drafting path and should not be uploaded for this public proof. The replacement PDF accurately shows the public browser-memory workflow, Gemini/deterministic boundary, Cloud Run API, isolated demo path, fail-closed outcomes, and non-sending human control.
+This single diagram describes the submitted public architecture: the browser and active-tab state, Cloud Run API, ordinary Gemini 3.5 Flash / Google GenAI SDK path, isolated deterministic demo path, deterministic trust boundary, fail-closed outcomes, and non-sending human control. `ARCHITECTURE.md` provides supporting technical explanation of the same submitted design.
 
 ## Testing Instructions
 

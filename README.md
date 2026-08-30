@@ -4,6 +4,31 @@ BillWatch is an evidence-grounded medical-bill investigation proof of concept fo
 
 BillWatch does not claim that a bill is definitely wrong. It does not provide medical, legal, insurance, coding, or payment advice.
 
+## Hackathon required stack
+
+BillWatch is submitted to the **Taskmaster** category of the **All Things Agentic Hackathon**.
+
+- **Google AI:** Gemini 3.5 Flash (`gemini-3.5-flash`)
+- **Google Agent Framework:** Google GenAI SDK (`google-genai`)
+- **Google Cloud infrastructure:** Google Cloud Run in `us-central1`
+- **Ordinary-input production path:** Gemini proposes literal facts; deterministic validation and gates control what can become an accepted result.
+- **Offline local fallback:** deterministic extraction exists for reproducible testing when `GEMINI_API_KEY` is absent.
+- **Synthetic guided proof:** intentionally deterministic and isolated from ordinary Gemini analysis.
+
+The offline fallback does not replace Gemini in the submitted architecture. It allows reproducible local testing without requiring a judge to provide a credential.
+
+## Submitted architecture
+
+BillWatch uses one canonical architecture diagram across GitHub, Devpost, and the demo video:
+
+**[`output/pdf/billwatch-hackathon-architecture.pdf`](output/pdf/billwatch-hackathon-architecture.pdf)**
+
+That diagram represents the submitted public Taskmaster workflow in `app.py`: browser input and active-tab state, the Google Cloud Run API, the ordinary Gemini 3.5 Flash / Google GenAI SDK evidence path, the isolated deterministic synthetic-demo path, deterministic trust gates, fail-closed outcomes, and the human-controlled report boundary.
+
+[`ARCHITECTURE.md`](ARCHITECTURE.md) provides supporting technical explanation of the same submitted architecture and documents the deeper internal `billwatch/pipeline.py` module separately. The deeper pipeline is supporting engineering architecture and regression coverage; it is not represented as the currently exposed public web product.
+
+The public workflow performs the investigative heavy lifting automatically: request validation, literal-evidence extraction, exact-evidence validation, candidate-pair generation, bounded reference checks, applicability gates, missing-context identification, and cautious result generation. Human input is requested only when evidence required for a safe determination is genuinely absent or at the final simulated consequential-action boundary.
+
 ## Public proof of concept
 
 - URL: https://billwatch-403260979598.us-central1.run.app
@@ -14,11 +39,11 @@ BillWatch does not claim that a bill is definitely wrong. It does not provide me
 
 The investigation and approval state exists only in the active browser tab. Refreshing or closing the tab clears it. Raw bill text is processed transiently by the server and is not written to BillWatch application logs or durable storage. When the public service has Gemini enabled, ordinary extraction may send the submitted text to Gemini; the synthetic guided demo is deterministic and does not depend on Gemini.
 
-## Existing behavior and hackathon additions
+## Hackathon development history
 
-The original application already accepted arbitrary medical-bill text, extracted exact source-cited facts, generated every unique code pair, used fail-closed reference checks, separated AI proposals from deterministic decisions, enforced limits, and rejected `GET /investigate`.
+BillWatch was created during the All Things Agentic submission period. Earlier hackathon iterations established arbitrary medical-bill input, exact source-cited fact extraction, unique code-pair generation, fail-closed reference checks, deterministic decision boundaries, safety limits, and rejection of `GET /investigate`.
 
-The hackathon build extends those inspected components with:
+Later hackathon iterations extended those inspected components with:
 
 - truthful completed-stage and structured missing-context metadata;
 - one isolated, explicitly selected synthetic demo path;

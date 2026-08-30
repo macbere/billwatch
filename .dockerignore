@@ -11,3 +11,8 @@ __pycache__
 *.zip
 billwatch-backup-*
 *.before-*
+*.bak
+*.bak_*
+.diagnose_*.py
+*_forensic_*.txt
+capture_*_forensic.sh

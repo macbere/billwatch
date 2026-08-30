@@ -11,3 +11,8 @@ venv/
 *.zip
 .devpost-hackathon-state.json
 tmp/
+*.bak
+*.bak_*
+.diagnose_*.py
+*_forensic_*.txt
+capture_*_forensic.sh

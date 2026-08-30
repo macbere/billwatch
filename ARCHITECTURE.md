@@ -5,6 +5,20 @@ BillWatch has two related execution paths:
 - The public path in app.py accepts arbitrary bill text and returns a bounded evidence report.
 - The fuller domain path in billwatch/pipeline.py exercises the staged investigation state machine and remains covered by the domain tests.
 
+## Submitted product boundary
+
+The canonical submitted architecture diagram is [`output/pdf/billwatch-hackathon-architecture.pdf`](output/pdf/billwatch-hackathon-architecture.pdf). The same diagram is intended for GitHub review, Devpost upload, and the final demo video.
+
+The **submitted BillWatch product** is the public Taskmaster workflow exposed through `app.py`.
+
+The repository also contains the fuller domain pipeline in `billwatch/pipeline.py`. That pipeline is retained as supporting engineering architecture and regression coverage, but it is not presented as the currently exposed public web workflow.
+
+For the submitted product, BillWatch autonomously performs request validation, evidence extraction, exact-evidence validation, candidate identification, unique-pair expansion, bounded reference checks, applicability gates, missing-context identification, and bounded result generation.
+
+Human confirmation is a deliberate evidence or consequential-action boundary. It is not the mechanism performing the investigation.
+
+The ordinary-input path uses Gemini 3.5 Flash through the Google GenAI SDK when `GEMINI_API_KEY` is configured. Gemini output remains untrusted. The separately selected synthetic demonstration is deterministic and isolated from the ordinary-input path.
+
 ## Public request path
 
     Browser
