@@ -235,7 +235,7 @@ The verified public service is Google Cloud Run revision `billwatch-00014-ngm` i
 
 [https://github.com/macbere/billwatch](https://github.com/macbere/billwatch)
 
-The URL was supplied by the participant, and its public Git remote was reachable on 2026-08-30 at HEAD `679367a752cbf2cbc87337b3edcb0920e8c1518c`. Codex has not pushed the current local hackathon build to this repository. Because this workspace has no `.git` directory, the remote cannot yet be treated as synchronized with the tested and deployed local build.
+On 2026-08-30, the tested hackathon build was synchronized to the public repository's `master` branch. The verified core build commit is `3353a79dc9aedb04288b3648a911bd77984c08ce`. This source workspace still has no `.git` directory, so future changes should be made from or synchronized through a proper Git checkout.
 
 If the repository remains private, grant access to the official judge accounts named in the Devpost form. Run a final secret and privacy scan before making any repository public.
 
@@ -310,7 +310,7 @@ Show the 533-test result, verified Cloud Run revision, and one-sentence takeaway
 | Category | Taskmaster | Ready |
 | Organization name | N/A | Confirmed by participant |
 | Project start date (MM-DD-YY) | 08-07-26 | Confirmed by participant; within the official submission period |
-| Repository URL | https://github.com/macbere/billwatch | Public remote reachable; latest local hackathon changes are not pushed or verified there |
+| Repository URL | https://github.com/macbere/billwatch | Public and synchronized; core build commit `3353a79dc9aedb04288b3648a911bd77984c08ce` |
 | Reproducible testing instructions in README | Yes | Ready |
 | Hosted URL | https://billwatch-403260979598.us-central1.run.app | Ready |
 | Additional testing instructions | Use the public and local steps above | Ready |
@@ -335,7 +335,7 @@ A read-only check on 2026-08-30 confirmed that Devpost project `BillWatch` (proj
 - [x] Confirm the in-period project start date as `08-07-26`.
 - [x] Confirm submitter type, country of residence, and organization wording.
 - [x] Provide a publicly reachable GitHub repository URL.
-- [ ] Synchronize the current tested hackathon build to the repository and verify that its key code, tests, README, and submission evidence are present.
+- [x] Synchronize the tested hackathon build to the repository and verify its key code, tests, README, architecture PDF, screenshots, and submission evidence.
 - [x] Use the new Devpost-ready architecture PDF, not the older appeal-oriented SVG.
 - [x] Five public-demo screenshots are captured with suggested captions.
 - [ ] Record and upload the approximately four-minute demo video, including visible Cloud Run backend proof.
